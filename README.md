@@ -131,6 +131,14 @@ pnpm tauri dev     # run the app in development
 pnpm tauri build   # produce a release bundle
 ```
 
+On macOS, you can build and install the app to `/Applications/Sageport.app` with one command:
+
+```sh
+pnpm build:macos
+```
+
+Set `SAGEPORT_APPLICATIONS_DIR="$HOME/Applications"` to install to your user Applications folder, or `SAGEPORT_SKIP_OPEN=1` to install without launching the app.
+
 `pnpm test` runs the frontend suite; `cargo test` inside `src-tauri` runs the backend suite.
 
 Under the hood: a Rust core (russh, SQLite via sqlx, tokio) behind a React 19 + TypeScript workbench (xterm.js, Monaco, Tailwind), packaged with Tauri 2.

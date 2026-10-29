@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && node scripts/check-bundle.mjs",
+    "build:macos": "bash scripts/build-install-macos.sh",
     "preview": "vite preview",
     "tauri": "tauri",
     "icon": "node scripts/generate-icons.mjs",

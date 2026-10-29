@@ -131,6 +131,14 @@ pnpm tauri dev     # 开发模式运行
 pnpm tauri build   # 打包发布版本
 ```
 
+macOS 可直接构建并安装到 `/Applications/Sageport.app`：
+
+```sh
+pnpm build:macos
+```
+
+设置 `SAGEPORT_APPLICATIONS_DIR="$HOME/Applications"` 可安装到用户 Applications；设置 `SAGEPORT_SKIP_OPEN=1` 可只构建安装而不启动。
+
 `pnpm test` 运行前端测试；在 `src-tauri` 目录下 `cargo test` 运行后端测试。
 
 技术栈：Rust 内核（russh、sqlx + SQLite、tokio）加 React 19 + TypeScript 工作台（xterm.js、Monaco、Tailwind），由 Tauri 2 打包。
