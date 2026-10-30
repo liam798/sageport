@@ -16,6 +16,12 @@ const CredentialsView = lazy(() =>
   })),
 );
 
+const DatabasesView = lazy(() =>
+  import("@/features/databases/DatabasesView").then((module) => ({
+    default: module.DatabasesView,
+  })),
+);
+
 const ForwardsView = lazy(() =>
   import("@/features/forwards/ForwardsView").then((module) => ({
     default: module.ForwardsView,
@@ -57,6 +63,7 @@ export const SideBar = memo(function SideBar({ width }: { width: number }) {
           }
         >
           {activity === "hosts" && <HostsView />}
+          {activity === "databases" && <DatabasesView />}
           {activity === "credentials" && <CredentialsView />}
           {activity === "snippets" && <SnippetsView />}
           {activity === "tasks" && <TasksView />}

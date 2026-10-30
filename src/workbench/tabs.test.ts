@@ -30,6 +30,7 @@ import type { TerminalSession } from "@/features/terminal/session";
 import { layoutPaneIds } from "./pane-layout";
 import {
   isFileDirty,
+  MAX_DATABASE_TABS,
   MAX_FILE_TABS,
   MAX_TERMINAL_SESSIONS,
   paneTab,
@@ -293,6 +294,35 @@ describe("openFile", () => {
     expect(useTabsStore.getState().activeId).toBe(
       useTabsStore.getState().tabs[9]!.id,
     );
+  });
+});
+
+describe("openDatabase", () => {
+  it("activates an existing connection instead of opening a duplicate", () => {
+    const first = useTabsStore
+      .getState()
+      .openDatabase({ id: "db-1", name: "Production" });
+    const second = useTabsStore
+      .getState()
+      .openDatabase({ id: "db-1", name: "Production" });
+
+    expect(first).not.toBeNull();
+    expect(second).toBe(first);
+    expect(useTabsStore.getState().tabs).toHaveLength(1);
+    expect(useTabsStore.getState().activeId).toBe(first);
+  });
+
+  it("limits mounted database connections", () => {
+    for (let index = 0; index < MAX_DATABASE_TABS; index++) {
+      useTabsStore
+        .getState()
+        .openDatabase({ id: `db-${index}`, name: `Database ${index}` });
+    }
+    expect(
+      useTabsStore
+        .getState()
+        .openDatabase({ id: "overflow", name: "Overflow" }),
+    ).toBeNull();
   });
 });
 

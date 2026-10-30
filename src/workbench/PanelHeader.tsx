@@ -18,11 +18,13 @@ export const PANEL_LIST_ACTION_CLASS =
 
 export function PanelHeader({
   title,
+  titleBefore,
   titleAfter,
   actions,
   className,
 }: {
   title: ReactNode;
+  titleBefore?: ReactNode;
   titleAfter?: ReactNode;
   actions?: ReactNode;
   className?: string;
@@ -36,6 +38,7 @@ export function PanelHeader({
       )}
     >
       <div className="flex min-w-0 items-center gap-2">
+        {titleBefore}
         <h2 className="min-w-0 truncate text-sm font-semibold leading-snug text-surface-foreground">
           {title}
         </h2>

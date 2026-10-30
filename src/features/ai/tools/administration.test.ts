@@ -27,6 +27,7 @@ describe("administration tools", () => {
       baseUrl: "https://example.com/v1",
       protocol: "openai",
       autoApprove: false,
+      approvalMode: "request",
       enabledTools: null,
       maxHistoryTokens: null,
     });
@@ -41,7 +42,23 @@ describe("administration tools", () => {
     expect(setConfig).toHaveBeenCalledWith(
       expect.objectContaining({
         autoApprove: true,
+        approvalMode: "assistant",
         enabledTools: undefined,
+      }),
+    );
+  });
+
+  it("sets full approval mode explicitly", async () => {
+    const result = await updateAiSettings?.execute?.(
+      { approvalMode: "full" },
+      {},
+    );
+
+    expect(result?.isError).toBe(false);
+    expect(setConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        autoApprove: true,
+        approvalMode: "full",
       }),
     );
   });

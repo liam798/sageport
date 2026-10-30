@@ -4,9 +4,13 @@ import { detectLocale } from "@/i18n/config";
 import { translate } from "@/i18n/translate";
 import { ipc } from "@/lib/ipc";
 import { errorMessage, toast } from "@/lib/toast";
-import type { AiSessionSummary, AiImageAttachment } from "@/types/models";
+import type {
+  AiApprovalMode,
+  AiExecutionTarget,
+  AiSessionSummary,
+  AiImageAttachment,
+} from "@/types/models";
 import { imageHistoryError } from "./images";
-import { targetPaneId, useTabsStore } from "@/workbench/tabs";
 import { runAgentLoop, type RunnerHost } from "./runner";
 import {
   buildLogFromHistory,
@@ -38,20 +42,25 @@ interface AiStoreState {
   sessionsLoaded: boolean;
   activeId: string | null;
   runtime: Record<string, RuntimeSession>;
+  executionTargets: Record<string, AiExecutionTarget | null>;
+  approvalModes: Record<string, AiApprovalMode>;
 
   loadSessions: () => Promise<void>;
 
   openSession: (id: string) => Promise<void>;
 
-  newSession: () => Promise<string>;
+  newSession: (
+    approvalMode?: AiApprovalMode,
+    executionTarget?: AiExecutionTarget | null,
+  ) => Promise<string>;
   startNewChat: () => void;
   deleteSession: (id: string) => Promise<void>;
+  setApprovalMode: (sessionId: string, mode: AiApprovalMode) => Promise<void>;
 
   send: (
     sessionId: string,
     prompt: string,
     model: string,
-    autoApprove: boolean,
     enabledTools: string[],
     maxHistoryTokens?: number | null,
     images?: AiImageAttachment[],
@@ -60,7 +69,6 @@ interface AiStoreState {
   resume: (
     sessionId: string,
     model: string,
-    autoApprove: boolean,
     enabledTools: string[],
     maxHistoryTokens?: number | null,
   ) => Promise<void>;
@@ -143,20 +151,20 @@ export const useAiStore = create<AiStoreState>((set, get) => {
   const runLoop = async (
     sessionId: string,
     model: string,
-    autoApprove: boolean,
+    approvalMode: AiApprovalMode,
     enabledTools: string[],
     maxHistoryTokens?: number | null,
-    defaultTerminalId = targetPaneId(useTabsStore.getState()),
+    executionTarget?: AiExecutionTarget | null,
   ) => {
     try {
       await runAgentLoop(
         host,
         sessionId,
         model,
-        autoApprove,
+        approvalMode,
         enabledTools,
         maxHistoryTokens,
-        defaultTerminalId,
+        executionTarget,
       );
     } catch (err) {
       const message = errorMessage(err);
@@ -187,6 +195,8 @@ export const useAiStore = create<AiStoreState>((set, get) => {
     sessionsLoaded: false,
     activeId: null,
     runtime: {},
+    executionTargets: {},
+    approvalModes: {},
 
     loadSessions: async () => {
       if (get().sessionsLoaded) return;
@@ -207,9 +217,14 @@ export const useAiStore = create<AiStoreState>((set, get) => {
                 (session) =>
                   !remoteIds.has(session.id) && !deleting.has(session.id),
               );
+              const executionTargets = { ...state.executionTargets };
+              for (const session of sessions) {
+                executionTargets[session.id] = session.executionTarget;
+              }
               return {
                 sessions: [...localOnly, ...sessions],
                 sessionsLoaded: true,
+                executionTargets,
               };
             });
             const state = get();
@@ -247,6 +262,14 @@ export const useAiStore = create<AiStoreState>((set, get) => {
               log: buildLogFromHistory(history),
             },
           },
+          approvalModes: {
+            ...s.approvalModes,
+            [id]: session.approvalMode,
+          },
+          executionTargets: {
+            ...s.executionTargets,
+            [id]: session.executionTarget,
+          },
         }));
       } catch (err) {
         if (get().activeId === id) set({ activeId: null });
@@ -254,23 +277,35 @@ export const useAiStore = create<AiStoreState>((set, get) => {
       }
     },
 
-    newSession: async () => {
+    newSession: async (approvalMode = "request", executionTarget = null) => {
       if (!sessionCreate) {
         sessionCreate = (async () => {
           try {
-            const session = await ipc.ai.session.create();
+            const session = await ipc.ai.session.create(
+              approvalMode,
+              executionTarget,
+            );
             sessionMutationVersion += 1;
             set((s) => ({
               sessions: [
                 {
                   id: session.id,
                   title: session.title,
+                  executionTarget: session.executionTarget,
                   createdAt: session.createdAt,
                   updatedAt: session.updatedAt,
                 },
                 ...s.sessions.filter((item) => item.id !== session.id),
               ],
               runtime: { ...s.runtime, [session.id]: emptyRuntime() },
+              approvalModes: {
+                ...s.approvalModes,
+                [session.id]: session.approvalMode,
+              },
+              executionTargets: {
+                ...s.executionTargets,
+                [session.id]: session.executionTarget,
+              },
               activeId: session.id,
             }));
             return session.id;
@@ -283,6 +318,24 @@ export const useAiStore = create<AiStoreState>((set, get) => {
     },
 
     startNewChat: () => set({ activeId: null }),
+
+    setApprovalMode: async (sessionId, mode) => {
+      const previous = get().approvalModes[sessionId] ?? "request";
+      if (previous === mode) return;
+      set((state) => ({
+        approvalModes: { ...state.approvalModes, [sessionId]: mode },
+      }));
+      try {
+        await ipc.ai.session.setApprovalMode(sessionId, mode);
+      } catch (err) {
+        if ((get().approvalModes[sessionId] ?? "request") === mode) {
+          set((state) => ({
+            approvalModes: { ...state.approvalModes, [sessionId]: previous },
+          }));
+        }
+        toast.error(t("ai.error"), errorMessage(err));
+      }
+    },
 
     deleteSession: async (id) => {
       sessionMutationVersion += 1;
@@ -300,10 +353,14 @@ export const useAiStore = create<AiStoreState>((set, get) => {
         const sessions = s.sessions.filter((x) => x.id !== id);
         const runtime = { ...s.runtime };
         delete runtime[id];
+        const executionTargets = { ...s.executionTargets };
+        delete executionTargets[id];
+        const approvalModes = { ...s.approvalModes };
+        delete approvalModes[id];
         const activeId =
           s.activeId === id ? (sessions[0]?.id ?? null) : s.activeId;
         if (s.activeId === id) nextId = activeId;
-        return { sessions, runtime, activeId };
+        return { sessions, runtime, executionTargets, approvalModes, activeId };
       });
       persistenceFailures.delete(id);
       removedSessionIds.add(id);
@@ -315,12 +372,10 @@ export const useAiStore = create<AiStoreState>((set, get) => {
       sessionId,
       prompt,
       model,
-      autoApprove,
       enabledTools,
       maxHistoryTokens,
       images = [],
     ) => {
-      const defaultTerminalId = targetPaneId(useTabsStore.getState());
       const trimmed = prompt.trim();
       const runtime = get().runtime[sessionId];
       if (
@@ -339,6 +394,8 @@ export const useAiStore = create<AiStoreState>((set, get) => {
         return;
       }
       const isFirstTurn = runtime.history.length === 0;
+      const approvalMode = get().approvalModes[sessionId] ?? "request";
+      const executionTarget = get().executionTargets[sessionId] ?? null;
       const title = isFirstTurn
         ? deriveTitle(trimmed || t("ai.images.chatTitle"))
         : null;
@@ -358,20 +415,14 @@ export const useAiStore = create<AiStoreState>((set, get) => {
       await runLoop(
         sessionId,
         model,
-        autoApprove,
+        approvalMode,
         enabledTools,
         maxHistoryTokens,
-        defaultTerminalId,
+        executionTarget,
       );
     },
 
-    resume: async (
-      sessionId,
-      model,
-      autoApprove,
-      enabledTools,
-      maxHistoryTokens,
-    ) => {
+    resume: async (sessionId, model, enabledTools, maxHistoryTokens) => {
       const runtime = get().runtime[sessionId];
       if (!model || !runtime || runtime.pending || !runtime.stepLimitReached) {
         return;
@@ -382,12 +433,15 @@ export const useAiStore = create<AiStoreState>((set, get) => {
         stopRequested: false,
         stepLimitReached: false,
       }));
+      const approvalMode = get().approvalModes[sessionId] ?? "request";
+      const executionTarget = get().executionTargets[sessionId] ?? null;
       await runLoop(
         sessionId,
         model,
-        autoApprove,
+        approvalMode,
         enabledTools,
         maxHistoryTokens,
+        executionTarget,
       );
     },
 

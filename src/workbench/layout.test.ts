@@ -45,6 +45,7 @@ describe("workbench layout sizing", () => {
         panelHeight: Number.POSITIVE_INFINITY,
         auxVisible: null,
         auxWidth: -500,
+        auxMaximized: "yes",
       },
       { viewportWidth: 1280, viewportHeight: 800, scale: 1 },
     );
@@ -72,6 +73,20 @@ describe("workbench layout sizing", () => {
     ).toBeGreaterThanOrEqual(EDITOR_MIN_W);
     expect(normalized.sidebarWidth).toBeGreaterThanOrEqual(SIDEBAR_MIN);
     expect(normalized.auxWidth).toBeGreaterThanOrEqual(AUX_MIN);
+  });
+
+  it("restores a maximized assistant layout", () => {
+    const normalized = normalizeLayoutSnapshot(
+      {
+        ...DEFAULT_LAYOUT,
+        auxVisible: true,
+        auxMaximized: true,
+      },
+      { viewportWidth: 1280, viewportHeight: 800, scale: 1 },
+    );
+
+    expect(normalized.auxVisible).toBe(true);
+    expect(normalized.auxMaximized).toBe(true);
   });
 
   it("clamps restored panel heights at the current zoom and viewport", () => {

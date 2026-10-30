@@ -13,6 +13,7 @@ import {
   TOOLS_WITH_UNTRUSTED_RESULTS,
   getTool,
   enabledToolSpecs,
+  enabledToolSpecsForTarget,
   normalizeEnabledToolNames,
   prepareTool,
   resolveEnabledToolNames,
@@ -82,6 +83,22 @@ describe("tool registry", () => {
     expect(resolveEnabledToolNames(["list_hosts", "ask_user"])).toEqual([
       "list_hosts",
     ]);
+  });
+
+  it("limits a database execution target to database tools", () => {
+    const names = enabledToolSpecsForTarget(
+      ["list_hosts", "run_command_on_hosts", "delete_host"],
+      "database",
+    ).map((spec) => spec.name);
+
+    expect(new Set(names)).toEqual(
+      new Set([
+        "ask_user",
+        "list_database_connections",
+        "list_database_schema",
+        "execute_database_query",
+      ]),
+    );
   });
 
   it("returns args unchanged when a tool declares no prepare hook", async () => {

@@ -6,7 +6,7 @@
 
 **One workspace for every server you run.**
 
-Terminal, file transfer, monitoring, port forwarding, and scheduled automation — in a single free, open-source desktop app that talks plain SSH.
+Terminal, file transfer, database queries, monitoring, port forwarding, and scheduled automation — in a single free, open-source desktop app that talks plain SSH.
 
 [![Latest release](https://img.shields.io/github/v/release/joygqz/sageport)](https://github.com/joygqz/sageport/releases/latest)
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue)](LICENSE)
@@ -22,14 +22,15 @@ English · [简体中文](README.zh-CN.md)
 
 Server work usually means a pile of tools: a terminal here, an SFTP client there, cron scripts on some box, a notes file full of commands, and a key manager you half trust. Sageport folds all of that into one VS Code-style workspace.
 
-| You are juggling…            | Sageport gives you                                         |
-| ---------------------------- | ---------------------------------------------------------- |
-| A terminal per server        | Tabs, split panes, and broadcast input across servers      |
-| A separate SFTP client       | A two-pane file browser with drag-and-drop and remote edit |
-| Deploy scripts and cron jobs | Visual tasks with schedules, retries, and run history      |
-| `htop` over SSH              | Live CPU, memory, disk, and network — no agent             |
-| A notes file of commands     | Snippets with variables, runnable across many hosts        |
-| `ssh -L` incantations        | One-click port forwarding, auto-start included             |
+| You are juggling…            | Sageport gives you                                            |
+| ---------------------------- | ------------------------------------------------------------- |
+| A terminal per server        | Tabs, split panes, and broadcast input across servers         |
+| A separate SFTP client       | A two-pane file browser with drag-and-drop and remote edit    |
+| A separate database GUI      | Local PostgreSQL, MySQL, and SQLite connections with SQL tabs |
+| Deploy scripts and cron jobs | Visual tasks with schedules, retries, and run history         |
+| `htop` over SSH              | Live CPU, memory, disk, and network — no agent                |
+| A notes file of commands     | Snippets with variables, runnable across many hosts           |
+| `ssh -L` incantations        | One-click port forwarding, auto-start included                |
 
 Three principles run through everything:
 
@@ -56,6 +57,12 @@ Put a task on a cron schedule and it runs by itself. Closing the window doesn't 
 ### Hosts and credentials
 
 Group hosts however you think about them, share logins across hosts with reusable identities, and reach machines behind a bastion through jump-host chains. Import everything you already have from `~/.ssh/config` in one step. Generate, import, and manage SSH keys inside the app.
+
+### Database client
+
+Manage PostgreSQL, MySQL, and SQLite connections beside your hosts. Each connection opens in its own SQL tab with a schema browser, Monaco editor, results pane, and a table or view preview. Statements have a 30-second timeout and results are capped at 1,000 rows; large cell values are truncated for display.
+
+Database connection details and passwords are stored in the local Sageport database using the same plaintext model as host credentials. Database connections are currently kept on each device and are not included in sync snapshots or encrypted backup exports.
 
 ### Monitoring
 
@@ -100,7 +107,8 @@ Installed builds update themselves — new versions install right from the app.
 1. **Add a server.** Press <kbd>⌘</kbd> <kbd>N</kbd> and enter the address, username, and password or key — or import your `~/.ssh/config` hosts in one go.
 2. **Connect.** Click the host in the sidebar, or press <kbd>⌘</kbd> <kbd>P</kbd> and type its name.
 3. **Move files.** Press <kbd>⌘</kbd> <kbd>J</kbd> and drag files between the two panes.
-4. **Automate something.** Open the Tasks view, pick a template, point it at your host, and run it. Once you trust it, add a schedule and let the tray take it from there.
+4. **Query a database.** Open Databases in the activity bar, add a PostgreSQL, MySQL, or SQLite connection, and run SQL beside the object browser.
+5. **Automate something.** Open the Tasks view, pick a template, point it at your host, and run it. Once you trust it, add a schedule and let the tray take it from there.
 
 On Windows and Linux, read <kbd>⌘</kbd> as <kbd>Ctrl</kbd>.
 
@@ -111,6 +119,9 @@ No. Sageport uses standard SSH and SFTP. Monitoring runs ordinary commands over 
 
 **Where is my data stored?**
 In a local database on your device. There is no Sageport cloud and no account. Note that passwords and keys are stored unencrypted in that database — anything that can read your user files can read them, so protect the device itself.
+
+**Are database connections synced?**
+Not yet. Database connection records stay on the device where you create them and are not included in sync snapshots or encrypted backup exports.
 
 **Do scheduled tasks run when the app is closed?**
 They run as long as Sageport is running — in the window or minimized to the tray. Closing the window hides it to the tray and keeps schedules alive; quitting from the tray menu stops everything. Every run is recorded locally either way.

@@ -1,4 +1,5 @@
 import {
+  Database,
   Gauge,
   KeyRound,
   Network,
@@ -23,6 +24,7 @@ import {
 
 const ACTIVITIES: { id: Activity; icon: LucideIcon; labelKey: TKey }[] = [
   { id: "hosts", icon: Server, labelKey: "activityBar.hosts" },
+  { id: "databases", icon: Database, labelKey: "activityBar.databases" },
   { id: "credentials", icon: KeyRound, labelKey: "activityBar.credentials" },
   { id: "snippets", icon: SquareTerminal, labelKey: "activityBar.snippets" },
   { id: "tasks", icon: Workflow, labelKey: "activityBar.tasks" },

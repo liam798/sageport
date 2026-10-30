@@ -2,11 +2,13 @@ import type { LucideIcon } from "lucide-react";
 
 import type { TKey } from "@/i18n";
 import type { AiToolSpec } from "@/types/models";
+import type { AiExecutionTargetKind } from "../execution-target";
 import { settingsTools, syncTools, updateTools } from "./administration";
 import { askTools } from "./ask";
 import { bookmarkTools } from "./bookmarks";
 import { setAiToolCatalog } from "./catalog";
 import { credentialTools } from "./credentials";
+import { databaseTools } from "./databases";
 import { fileTools } from "./files";
 import { forwardTools } from "./forwards";
 import { groupTools } from "./groups";
@@ -34,6 +36,7 @@ export const ALL_TOOLS: AiTool[] = [
   ...fileTools,
   ...bookmarkTools,
   ...credentialTools,
+  ...databaseTools,
   ...monitorTools,
   ...settingsTools,
   ...syncTools,
@@ -63,6 +66,7 @@ export const TOOL_GROUPS = [
     tools: terminalTools.filter((tool) => !CORE_TOOL_NAMES.has(tool.spec.name)),
   },
   { id: "hosts", tools: [...hostTools, ...groupTools, ...monitorTools] },
+  { id: "databases", tools: databaseTools },
   { id: "files", tools: [...fileTools, ...bookmarkTools] },
   { id: "snippets", tools: snippetTools },
   { id: "tasks", tools: taskTools },
@@ -74,6 +78,9 @@ export const TOOL_GROUPS = [
 ] as const;
 
 const TOOLS_BY_NAME = new Map(ALL_TOOLS.map((tool) => [tool.spec.name, tool]));
+const DATABASE_TARGET_TOOL_NAMES: ReadonlySet<string> = new Set(
+  databaseTools.map((tool) => tool.spec.name),
+);
 
 const SENSITIVE_ARGUMENTS: Readonly<Record<string, ReadonlySet<string>>> = {
   create_host: new Set(["password"]),
@@ -268,6 +275,20 @@ export function enabledToolSpecs(names: readonly string[]): AiToolSpec[] {
   return enabledTools(names).map((tool) => tool.spec);
 }
 
+export function enabledToolSpecsForTarget(
+  names: readonly string[],
+  targetKind: AiExecutionTargetKind | null,
+): AiToolSpec[] {
+  if (targetKind === "database") {
+    return ALL_TOOLS.filter(
+      (tool) =>
+        tool.spec.name === "ask_user" ||
+        DATABASE_TARGET_TOOL_NAMES.has(tool.spec.name),
+    ).map((tool) => tool.spec);
+  }
+  return enabledToolSpecs(names);
+}
+
 export const TOOLS_REQUIRING_APPROVAL: ReadonlySet<string> = new Set(
   ALL_TOOLS.filter((tool) => tool.requiresApproval).map(
     (tool) => tool.spec.name,
@@ -329,7 +350,11 @@ export async function executeTool(
 export async function prepareTool(
   name: string,
   args: Record<string, unknown>,
-  meta: { userPrompt: string; defaultTerminalId?: string | null },
+  meta: {
+    userPrompt: string;
+    defaultTerminalId?: string | null;
+    defaultDatabaseId?: string | null;
+  },
 ): Promise<PreparedCall> {
   const tool = TOOLS_BY_NAME.get(name);
   if (!tool?.prepare) return { args };

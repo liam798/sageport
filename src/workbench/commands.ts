@@ -187,6 +187,7 @@ export function useCommands(): WorkbenchCommand[] {
       ...(
         [
           "hosts",
+          "databases",
           "credentials",
           "snippets",
           "tasks",

@@ -977,7 +977,7 @@ function HostRow({
           }}
           className={cn(
             PANEL_LIST_ITEM_CLASS,
-            "cursor-pointer touch-none select-none outline-none",
+            "relative cursor-pointer touch-none select-none outline-none",
             dragging && "opacity-50",
           )}
         >
@@ -1007,7 +1007,7 @@ function HostRow({
               {host.address}
             </p>
           </div>
-          <div className="host-list-actions pointer-events-none flex w-6 shrink-0 items-center overflow-hidden opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
+          <div className="panel-list-overlay-actions pointer-events-none absolute right-2 top-1/2 flex -translate-y-1/2 items-center rounded-md bg-list-hover p-0.5 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
             <Tooltip content={t("hosts.connect")}>
               <button
                 type="button"

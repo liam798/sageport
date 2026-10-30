@@ -11,6 +11,7 @@ import { createPortal } from "react-dom";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   CircleX,
+  Database,
   FileText,
   FolderOpen,
   PlugZap,
@@ -74,6 +75,12 @@ const FileEditor = lazy(() =>
 const TerminalEditor = lazy(() =>
   import("@/features/terminal/TerminalEditor").then((module) => ({
     default: module.TerminalEditor,
+  })),
+);
+
+const DatabaseWorkspace = lazy(() =>
+  import("@/features/databases/DatabaseWorkspace").then((module) => ({
+    default: module.DatabaseWorkspace,
   })),
 );
 
@@ -474,8 +481,10 @@ export const EditorArea = memo(function EditorArea() {
                   <Suspense fallback={<EditorLoading />}>
                     {tab.kind === "terminal" ? (
                       <TerminalEditor tab={tab} active={tab.id === activeId} />
-                    ) : (
+                    ) : tab.kind === "file" ? (
                       <FileEditor tab={tab} />
+                    ) : (
+                      <DatabaseWorkspace tab={tab} />
                     )}
                   </Suspense>
                 </ErrorBoundary>
@@ -699,8 +708,10 @@ function TabItem({
                   )}
                 />
               </span>
-            ) : (
+            ) : tab.kind === "file" ? (
               <FileText className="size-3.5 shrink-0" />
+            ) : (
+              <Database className="size-3.5 shrink-0" />
             )}
 
             <span className="min-w-0 max-w-36 truncate text-left">{title}</span>
@@ -819,8 +830,10 @@ function TabDragGhost({
             )}
           />
         </span>
-      ) : (
+      ) : tab.kind === "file" ? (
         <FileText className="size-3.5 shrink-0" />
+      ) : (
+        <Database className="size-3.5 shrink-0" />
       )}
       <span className="min-w-0 flex-1 truncate">{title}</span>
       {dirty ? (

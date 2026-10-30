@@ -29,6 +29,7 @@ pub(super) fn sanitize(entry: &SettingEntry) -> Option<SettingEntry> {
         "ai.api_key" => bounded_text(&entry.value, MAX_API_KEY_BYTES)?.to_string(),
         "ai.model" => bounded_text(&entry.value, MAX_MODEL_BYTES)?.to_string(),
         "ai.auto_approve" => one_of(&entry.value, &["true", "false"])?,
+        "ai.approval_mode" => one_of(&entry.value, &["request", "assistant", "full"])?,
         "ai.enabled_tools" => sanitize_enabled_tools(&entry.value)?,
         "ai.max_history_tokens" => sanitize_max_history_tokens(&entry.value)?,
         _ => return None,
@@ -325,6 +326,7 @@ mod tests {
         assert!(sanitize(&setting("ai.protocol", "anthropic")).is_some());
         assert!(sanitize(&setting("ai.base_url", "http://localhost:11434/v1")).is_some());
         assert!(sanitize(&setting("ai.auto_approve", "false")).is_some());
+        assert!(sanitize(&setting("ai.approval_mode", "full")).is_some());
         assert!(sanitize(&setting("ai.max_history_tokens", "200000")).is_some());
     }
 
@@ -353,6 +355,7 @@ mod tests {
         ))
         .is_none());
         assert!(sanitize(&setting("ai.auto_approve", "1")).is_none());
+        assert!(sanitize(&setting("ai.approval_mode", "always")).is_none());
         assert!(sanitize(&setting("future.setting", "value")).is_none());
         assert!(sanitize(&setting("sync.connection", "secret")).is_none());
     }

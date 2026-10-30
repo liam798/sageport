@@ -1,5 +1,6 @@
 pub mod ai_session_repo;
 pub mod bookmark_repo;
+pub mod database_repo;
 pub mod forward_repo;
 pub mod group_repo;
 pub mod history_repo;

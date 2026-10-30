@@ -33,7 +33,16 @@ anyhow = "1"
 
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "io-util", "net", "process"] }
 
-sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "sqlite", "macros", "migrate"] }
+sqlx = { version = "0.9", default-features = false, features = [
+  "runtime-tokio",
+  "sqlite",
+  "postgres",
+  "mysql",
+  "macros",
+  "migrate",
+  "tls-rustls-ring-native-roots",
+] }
+futures-util = "0.3"
 uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4" }
 

@@ -478,10 +478,8 @@
     opacity: 0.8;
   }
 
-  .host-list-actions {
+  .panel-list-overlay-actions {
     pointer-events: auto;
-    margin-left: 0;
-    width: 2rem;
     opacity: 1;
   }
 }

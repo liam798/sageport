@@ -9,9 +9,10 @@ export {
   terminalTargetDisplay,
   terminalReadLineLimit,
 } from "./terminal";
-export { reusableHostSession } from "./hosts";
+export { reusableHostSession, waitForTerminalConnection } from "./hosts";
 export {
   enabledToolSpecs,
+  enabledToolSpecsForTarget,
   executeTool,
   prepareTool,
   redactToolArguments,

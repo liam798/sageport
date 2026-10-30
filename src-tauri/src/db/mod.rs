@@ -106,6 +106,17 @@ mod tests {
                 .fetch_all(&pool)
                 .await
                 .unwrap();
+        let ai_session_columns: Vec<String> =
+            sqlx::query_scalar("SELECT name FROM pragma_table_info('ai_sessions')")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+        let ai_session_default_mode: Option<String> = sqlx::query_scalar(
+            "SELECT dflt_value FROM pragma_table_info('ai_sessions') WHERE name = 'approval_mode'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
         pool.close().await;
 
         assert_eq!(count, 0);
@@ -123,6 +134,7 @@ mod tests {
             "ai_sessions",
             "sftp_transfers",
             "port_forwards",
+            "database_connections",
             "proxy_profiles",
             "sftp_bookmarks",
             "command_history",
@@ -131,6 +143,13 @@ mod tests {
         }
         assert!(!host_columns.iter().any(|name| name == "requires_approval"));
         assert!(!host_columns.iter().any(|name| name == "color"));
+        assert!(ai_session_columns
+            .iter()
+            .any(|name| name == "approval_mode"));
+        assert!(ai_session_columns
+            .iter()
+            .any(|name| name == "execution_target"));
+        assert_eq!(ai_session_default_mode.as_deref(), Some("'request'"));
         assert!(violations.is_empty());
         assert!(path.exists());
         std::fs::remove_dir_all(dir).unwrap();

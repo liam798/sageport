@@ -33,6 +33,53 @@ export interface Host {
   revision: number;
 }
 
+export type DatabaseEngine = "postgres" | "mysql" | "sqlite";
+
+export interface DatabaseConnection {
+  id: string;
+  name: string;
+  engine: DatabaseEngine;
+  host: string;
+  port: number;
+  username: string | null;
+  hasPassword: boolean;
+  database: string | null;
+  filePath: string | null;
+  ssl: boolean;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+  revision: number;
+}
+
+export interface DatabaseConnectionInput {
+  name: string;
+  engine: DatabaseEngine;
+  host?: string;
+  port?: number;
+  username?: string | null;
+  password?: string | null;
+  database?: string | null;
+  filePath?: string | null;
+  ssl?: boolean;
+}
+
+export type DatabaseObjectKind = "table" | "view";
+
+export interface DatabaseSchemaObject {
+  schema: string;
+  name: string;
+  kind: DatabaseObjectKind;
+}
+
+export interface DatabaseQueryResult {
+  columns: string[];
+  rows: Array<Array<string | null>>;
+  affectedRows: number | null;
+  elapsedMs: number;
+  truncated: boolean;
+}
+
 export type BatchExecStatus = "queued" | "running" | "done" | "error";
 
 export interface BatchExecEvent {
@@ -394,6 +441,15 @@ export interface TrayMenuData {
 }
 
 export type AiProtocol = "openai" | "anthropic";
+export type AiApprovalMode = "request" | "assistant" | "full";
+export type AiExecutionTargetKind = "host" | "terminal" | "database";
+
+export interface AiExecutionTarget {
+  kind: AiExecutionTargetKind;
+  id: string;
+  label: string;
+  detail?: string;
+}
 
 export interface AiConfig {
   hasApiKey: boolean;
@@ -401,6 +457,7 @@ export interface AiConfig {
   protocol: AiProtocol;
   model: string;
   autoApprove: boolean;
+  approvalMode: AiApprovalMode;
   enabledTools: string[] | null;
   maxHistoryTokens: number | null;
 }
@@ -455,12 +512,14 @@ export interface AiModelLimits {
 export interface AiSessionSummary {
   id: string;
   title: string;
+  executionTarget: AiExecutionTarget | null;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface AiSession extends AiSessionSummary {
   messages: AiChatMessage[];
+  approvalMode: AiApprovalMode;
 }
 
 export type SyncProviderKind = "gist" | "gdrive" | "onedrive" | "webdav" | "s3";

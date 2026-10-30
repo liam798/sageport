@@ -70,6 +70,7 @@ export const en = {
   activityBar: {
     navigation: "Workspace navigation",
     hosts: "Hosts",
+    databases: "Databases",
     credentials: "Credentials",
     snippets: "Snippets",
     tasks: "Tasks",
@@ -271,6 +272,7 @@ export const en = {
     closeAllTabs: "Close all tabs",
     tabLimitReached: "You can open up to {count} terminal sessions",
     fileTabLimitReached: "You can open up to {count} files",
+    databaseTabLimitReached: "You can open up to {count} database connections",
     unsavedTitle: "Save changes?",
     unsavedIndicator: "Unsaved changes",
     unsavedDescription:
@@ -454,6 +456,88 @@ export const en = {
       rootHosts: "{count} hosts will become ungrouped.",
       rootGroups: "{count} subgroups will move to the top level.",
       error: "Failed to delete group",
+    },
+  },
+
+  databases: {
+    viewTitle: "Databases",
+    filterPlaceholder: "Filter databases",
+    new: "New database connection",
+    noMatches: "No matching database connections",
+    engine: {
+      postgres: "PostgreSQL",
+      mysql: "MySQL",
+      sqlite: "SQLite",
+    },
+    empty: {
+      title: "No database connections yet",
+      description: "Connect to PostgreSQL, MySQL, or a local SQLite database.",
+      action: "New database connection",
+    },
+    open: "Open query",
+    test: "Test connection",
+    testSuccess: "Connected to {name}",
+    testError: "Could not connect to {name}",
+    latency: "{ms} ms",
+    delete: {
+      title: "Delete database connection?",
+      description:
+        "This permanently deletes “{name}” and its saved credentials. The database itself is not changed.",
+      action: "Delete connection",
+      error: "Failed to delete database connection",
+    },
+  },
+
+  databaseForm: {
+    newTitle: "New database connection",
+    editTitle: "Edit database connection",
+    create: "Create connection",
+    name: "Name",
+    namePlaceholder: "Production database",
+    nameRequired: "Enter a name",
+    engine: "Engine",
+    host: "Host",
+    hostPlaceholder: "localhost or db.example.com",
+    hostRequired: "Enter a host",
+    port: "Port",
+    portInvalid: "Enter a port from 1 to 65535",
+    database: "Database",
+    databasePlaceholder: "app",
+    username: "Username",
+    usernamePlaceholder: "app",
+    password: "Password",
+    passwordSavedHint: "Password saved",
+    passwordRevealError: "Failed to reveal the saved password",
+    ssl: "Use SSL",
+    sslDescription: "Require an encrypted connection to the server.",
+    file: "Database file",
+    filePlaceholder: "Select a database file",
+    fileRequired: "Choose a database file",
+    sqliteFiles: "SQLite files",
+    chooseFile: "Choose file",
+    chooseFileError: "Failed to choose the database file",
+    saveError: "Failed to save database connection",
+  },
+
+  databaseWorkspace: {
+    run: "Run query",
+    executing: "Running query",
+    queryError: "Query failed",
+    editorLabel: "SQL editor",
+    results: "Results",
+    objects: "Objects",
+    refresh: "Refresh objects",
+    schemaError: "Could not load database objects",
+    noObjects: "No tables or views",
+    previewQuery: "Preview rows",
+    rowCount: "{count} rows",
+    affectedRows: "{count} rows affected",
+    elapsed: "{ms} ms",
+    truncated: "Showing the first 1,000 rows.",
+    completed: "Statement completed",
+    empty: {
+      title: "No query results yet",
+      description: "Run a statement to see its rows here.",
     },
   },
 
@@ -956,7 +1040,18 @@ export const en = {
 
   ai: {
     viewTitle: "AI assistant",
+    chatListTitle: "Chats",
+    backToChats: "Back to chats",
+    maximizePanel: "Expand assistant",
+    restorePanel: "Restore assistant",
     hidePanel: "Hide panel",
+    executionTarget: "Execution target",
+    targetGroup: {
+      hosts: "Hosts",
+      terminals: "Terminals",
+      databases: "Databases",
+    },
+    noExecutionTarget: "Choose target",
     setup: {
       title: "Set up the assistant",
       description: "Add a model provider to start chatting.",
@@ -972,7 +1067,6 @@ export const en = {
       systemLogs: "Review this host's system logs and troubleshoot issues",
     },
     newChat: "New chat",
-    history: "Chat history",
     noSessions: "No chats yet",
     untitledChat: "New chat",
     deleteChatTitle: "Delete this chat?",
@@ -1017,6 +1111,7 @@ export const en = {
     commandTarget: "Target: {name}",
     error: "Assistant error",
     confirmRun: "Run this command?",
+    confirmDatabaseQuery: "Run this query?",
     confirmRunTask: "Run this task?",
     confirmAction: "Allow this action?",
     confirmTransfer: "Transfer this item?",
@@ -1026,9 +1121,24 @@ export const en = {
     modelLoading: "Loading models…",
     modelEmpty: "No models available",
     promptTooLong: "The message is too long to send.",
-    autonomousMode: "Autonomous",
-    autonomousModeHint:
-      "Eligible operations are approved automatically. Reads and operations influenced by untrusted content still need approval.",
+    approvalMode: {
+      label: "Approval mode",
+      title: "How should this chat run operations?",
+      hint: "Approval mode applies only to this chat. New chats use the default in Settings.",
+      request: {
+        label: "Request approval",
+        description: "Ask before every operation that can change state.",
+      },
+      assistant: {
+        label: "Smart approval",
+        description:
+          "Run routine operations automatically. Still ask for risky work and untrusted content.",
+      },
+      full: {
+        label: "Full access",
+        description: "Run every tool directly without asking each time.",
+      },
+    },
     tool: {
       askUser: "Ask for your choice",
       listHosts: "List hosts",
@@ -1036,6 +1146,9 @@ export const en = {
       connectHost: "Connect to host",
       runCommandOnHosts: "Run command on hosts",
       checkHostHealth: "Check host connections",
+      listDatabaseConnections: "List database connections",
+      listDatabaseSchema: "List database schema",
+      executeDatabaseQuery: "Execute database query",
       createHost: "Create host",
       updateHost: "Update host",
       deleteHost: "Delete host",
@@ -1299,12 +1412,19 @@ export const en = {
       apiKeyHint:
         "Authenticates requests to the model provider. Services such as Ollama usually don't require one.",
       apiKeyRevealError: "Failed to reveal the API key",
-      autonomousModeLabel: "Assistant mode",
-      autonomousMode: "Autonomous mode",
-      autonomousModeHint:
-        "Automatically approves eligible operations. Reading terminal or remote file content and operations influenced by that content still require approval.",
-      autonomousModeWarning:
-        "This can make irreversible changes to your systems. Enable it only for hosts and tasks you trust.",
+      approvalModeLabel: "Default mode for new chats",
+      approvalMode: {
+        request: "Request approval",
+        assistant: "Smart approval",
+        full: "Full access",
+      },
+      approvalModeDescription: {
+        request:
+          "New chats ask before every operation that can change state. Existing chats are unchanged.",
+        assistant:
+          "New chats run routine operations automatically. Reading terminal or remote file content and operations influenced by that content still require approval. Existing chats are unchanged.",
+        full: "New chats run every tool directly without asking each time. This can make irreversible changes to your systems, so use it only for hosts and tasks you trust. Existing chats are unchanged.",
+      },
       tools: {
         title: "Assistant tools",
         description:
@@ -1314,6 +1434,7 @@ export const en = {
           core: "Core",
           terminal: "Terminal",
           hosts: "Hosts and groups",
+          databases: "Databases",
           files: "Files and bookmarks",
           snippets: "Snippets",
           tasks: "Tasks",

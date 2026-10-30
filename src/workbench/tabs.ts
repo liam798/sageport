@@ -6,7 +6,7 @@ import { detectLocale } from "@/i18n/config";
 import { translate } from "@/i18n/translate";
 import { ipc } from "@/lib/ipc";
 import { errorMessage, toast } from "@/lib/toast";
-import type { Host, SshStatusKind } from "@/types/models";
+import type { DatabaseConnection, Host, SshStatusKind } from "@/types/models";
 import {
   layoutExtent,
   layoutPaneIds,
@@ -37,6 +37,7 @@ export type PaneSplitDirection = "right" | "down";
 
 export const MAX_TERMINAL_SESSIONS = 10;
 export const MAX_FILE_TABS = 10;
+export const MAX_DATABASE_TABS = 10;
 const MAX_PANES_PER_DIRECTION: Record<SplitDirection, number> = {
   row: 3,
   column: 2,
@@ -87,7 +88,14 @@ export interface FileTab {
   saving: boolean;
 }
 
-export type EditorTab = TerminalTab | FileTab;
+export interface DatabaseTab {
+  kind: "database";
+  id: string;
+  connectionId: string;
+  title: string;
+}
+
+export type EditorTab = TerminalTab | FileTab | DatabaseTab;
 
 export function isFileDirty(tab: FileTab): boolean {
   return tab.content !== null && tab.content !== tab.savedContent;
@@ -116,6 +124,9 @@ interface TabsState {
     path: string;
     name: string;
   }) => void;
+  openDatabase: (
+    connection: Pick<DatabaseConnection, "id" | "name">,
+  ) => string | null;
   updateFileContent: (id: string, content: string) => void;
 
   saveFile: (id: string) => Promise<boolean>;
@@ -178,11 +189,16 @@ export function activePane(tab: TerminalTab): TerminalPane {
 }
 
 export function tabTitle(tab: EditorTab): string {
-  return tab.kind === "file" ? tab.title : activePane(tab).title;
+  if (tab.kind === "file" || tab.kind === "database") return tab.title;
+  return activePane(tab).title;
 }
 
 function fileTabCount(tabs: EditorTab[]): number {
   return tabs.filter((tab) => tab.kind === "file").length;
+}
+
+function databaseTabCount(tabs: EditorTab[]): number {
+  return tabs.filter((tab) => tab.kind === "database").length;
 }
 
 function closestPaneId(tabs: EditorTab[], closedIndex: number) {
@@ -516,6 +532,33 @@ export const useTabsStore = create<TabsState>((set, get) => {
         (text) => patchFile(id, { content: text, savedContent: text }),
         (err: unknown) => patchFile(id, { loadError: errorMessage(err) }),
       );
+    },
+
+    openDatabase: (connection) => {
+      const existing = get().tabs.find(
+        (tab) => tab.kind === "database" && tab.connectionId === connection.id,
+      );
+      if (existing) {
+        get().setActive(existing.id);
+        return existing.id;
+      }
+      if (databaseTabCount(get().tabs) >= MAX_DATABASE_TABS) {
+        toast.warning(
+          t("editor.databaseTabLimitReached", { count: MAX_DATABASE_TABS }),
+        );
+        return null;
+      }
+      const tab: DatabaseTab = {
+        kind: "database",
+        id: crypto.randomUUID(),
+        connectionId: connection.id,
+        title: connection.name,
+      };
+      set((state) => ({
+        tabs: [...state.tabs, tab],
+        activeId: tab.id,
+      }));
+      return tab.id;
     },
 
     updateFileContent: (id, content) => patchFile(id, { content }),

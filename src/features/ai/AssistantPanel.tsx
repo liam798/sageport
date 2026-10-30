@@ -6,14 +6,23 @@ import {
   useState,
 } from "react";
 import {
+  ArrowLeft,
   ArrowUp,
   Check,
+  ChevronDown,
   Copy,
+  Database,
+  Hand,
   History,
   KeyRound,
-  ImagePlus,
   Loader2,
+  Maximize2,
   MessageCirclePlus,
+  Minimize2,
+  Plus,
+  Server,
+  ShieldAlert,
+  ShieldCheck,
   Sparkles,
   Square,
   Terminal as TerminalIcon,
@@ -33,15 +42,18 @@ import {
   DialogTitle,
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuTrigger,
   EmptyState,
   INTERACTIVE_FOCUS_CLASS,
-  Select,
   Textarea,
   Tooltip,
 } from "@/components/ui";
 import { useI18n } from "@/i18n";
+import { useDatabaseConnections } from "@/features/databases/api";
+import { databaseDisplayName } from "@/features/databases/databaseQuery";
+import { useHosts } from "@/features/hosts/api";
 import { errorMessage, toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { useLayoutStore } from "@/workbench/layout";
@@ -50,9 +62,18 @@ import {
   PanelHeader,
   PANEL_HEADER_ACTION_CLASS,
 } from "@/workbench/PanelHeader";
-import { findPane, targetPaneId, useTabsStore } from "@/workbench/tabs";
+import {
+  findPane,
+  targetPaneId,
+  terminalPanes,
+  useTabsStore,
+} from "@/workbench/tabs";
 import { getSession } from "@/features/terminal/sessions";
-import type { AiImageAttachment } from "@/types/models";
+import type {
+  AiApprovalMode,
+  AiImageAttachment,
+  AiSessionSummary,
+} from "@/types/models";
 import {
   IMAGE_ACCEPT,
   MAX_MESSAGE_IMAGES,
@@ -65,6 +86,7 @@ import { useAiConfig, useAiModels, useSetAiModel } from "./api";
 import { safeExternalUrl } from "./links";
 import { shouldSubmitPrompt } from "./input";
 import { useAiStore } from "./store";
+import { executionTargetKey, type AiExecutionTarget } from "./execution-target";
 import { MAX_AI_PROMPT_CHARS, type AgentLogItem } from "./transcript";
 import {
   askUserOptions,
@@ -76,14 +98,149 @@ import { QuestionPrompt, ToolActivity } from "./ToolActivity";
 
 const EMPTY_LOG: AgentLogItem[] = [];
 const STICK_TO_BOTTOM_THRESHOLD = 32;
+type AssistantView = "chat" | "sessions";
+type ExecutionTargetOption = AiExecutionTarget & { key: string };
 const SUGGESTIONS = [
   "ai.suggestion.terminalOutput",
   "ai.suggestion.resourceUsage",
   "ai.suggestion.systemLogs",
 ] as const;
+const APPROVAL_MODES: {
+  value: AiApprovalMode;
+  icon: typeof Hand;
+}[] = [
+  { value: "request", icon: Hand },
+  { value: "assistant", icon: ShieldCheck },
+  { value: "full", icon: ShieldAlert },
+];
 
-export function AssistantPanel({ width }: { width: number }) {
+function ExecutionTargetMenuGroup({
+  label,
+  options,
+}: {
+  label: string;
+  options: ExecutionTargetOption[];
+}) {
+  if (options.length === 0) return null;
+  return (
+    <div className="space-y-0.5">
+      <div className="px-2 pb-1 pt-1.5 text-2xs font-medium text-muted-foreground">
+        {label}
+      </div>
+      {options.map((option) => {
+        const Icon =
+          option.kind === "host"
+            ? Server
+            : option.kind === "database"
+              ? Database
+              : TerminalIcon;
+        return (
+          <DropdownMenuRadioItem key={option.key} value={option.key}>
+            <Icon className="text-muted-foreground" />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate">{option.label}</span>
+              {option.detail && (
+                <span className="block truncate text-2xs text-muted-foreground">
+                  {option.detail}
+                </span>
+              )}
+            </span>
+          </DropdownMenuRadioItem>
+        );
+      })}
+    </div>
+  );
+}
+
+function ApprovalModeMenu({
+  value,
+  onChange,
+}: {
+  value: AiApprovalMode;
+  onChange: (value: AiApprovalMode) => void;
+}) {
   const { t } = useI18n();
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          className={cn(
+            "h-[var(--toolbar-control-size)] w-auto min-w-0 max-w-44 shrink justify-start px-2 text-xs font-normal",
+            value === "full" && "text-danger hover:text-danger",
+          )}
+          aria-label={t("ai.approvalMode.label")}
+          title={t(`ai.approvalMode.${value}.description`)}
+        >
+          {value === "full" ? (
+            <ShieldAlert className="size-3.5 shrink-0" />
+          ) : value === "assistant" ? (
+            <ShieldCheck className="size-3.5 shrink-0" />
+          ) : (
+            <Hand className="size-3.5 shrink-0" />
+          )}
+          <span className="min-w-0 truncate">
+            {t(`ai.approvalMode.${value}.label`)}
+          </span>
+          <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" side="top" className="w-80">
+        <div className="px-2 pb-1.5 pt-1">
+          <div className="text-xs font-medium">
+            {t("ai.approvalMode.title")}
+          </div>
+          <div className="mt-0.5 text-2xs leading-relaxed text-muted-foreground">
+            {t("ai.approvalMode.hint")}
+          </div>
+        </div>
+        <DropdownMenuRadioGroup
+          value={value}
+          onValueChange={(mode) => onChange(mode as AiApprovalMode)}
+        >
+          {APPROVAL_MODES.map(({ value: mode, icon: Icon }) => (
+            <DropdownMenuRadioItem
+              key={mode}
+              value={mode}
+              className={cn("items-start", mode === "full" && "text-danger")}
+            >
+              <span className="flex min-w-0 items-start gap-2">
+                <Icon className="mt-0.5 size-4 shrink-0" />
+                <span className="min-w-0">
+                  <span className="block text-xs font-medium">
+                    {t(`ai.approvalMode.${mode}.label`)}
+                  </span>
+                  <span
+                    className={cn(
+                      "mt-0.5 block whitespace-normal text-2xs leading-relaxed",
+                      mode === "full"
+                        ? "text-danger/80"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    {t(`ai.approvalMode.${mode}.description`)}
+                  </span>
+                </span>
+              </span>
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+export function AssistantPanel({
+  width,
+  maximized = false,
+  onToggleMaximized,
+}: {
+  width?: number;
+  maximized?: boolean;
+  onToggleMaximized?: () => void;
+}) {
+  const { locale, t } = useI18n();
   const { data: config } = useAiConfig();
   const setModel = useSetAiModel();
   const configured = Boolean(config?.baseUrl.trim());
@@ -107,6 +264,9 @@ export function AssistantPanel({ width }: { width: number }) {
   const deleteSession = useAiStore((s) => s.deleteSession);
   const send = useAiStore((s) => s.send);
   const resume = useAiStore((s) => s.resume);
+  const executionTargets = useAiStore((s) => s.executionTargets);
+  const approvalModes = useAiStore((s) => s.approvalModes);
+  const setApprovalMode = useAiStore((s) => s.setApprovalMode);
   const stop = useAiStore((s) => s.stop);
   const approve = useAiStore((s) => s.approve);
   const deny = useAiStore((s) => s.deny);
@@ -128,6 +288,11 @@ export function AssistantPanel({ width }: { width: number }) {
     pending && activity === "thinking" && !awaitingUser && !toolRunning;
 
   const [input, setInput] = useState("");
+  const [view, setView] = useState<AssistantView>("chat");
+  const [draftExecutionTarget, setDraftExecutionTarget] =
+    useState<AiExecutionTarget | null>(null);
+  const [draftApprovalMode, setDraftApprovalMode] =
+    useState<AiApprovalMode | null>(null);
   const [imageDraft, setImageDraft] = useState<{
     sessionId: string | null;
     items: AiImageAttachment[];
@@ -145,14 +310,72 @@ export function AssistantPanel({ width }: { width: number }) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const compositionActive = useRef(false);
   const enabledToolList = resolveEnabledToolNames(config?.enabledTools);
+  const defaultApprovalMode = config?.approvalMode ?? "request";
+  const approvalMode = activeId
+    ? (approvalModes[activeId] ?? "request")
+    : (draftApprovalMode ?? defaultApprovalMode);
   const sessionLoading = Boolean(activeId && !runtime);
-  const currentTarget = useTabsStore((state) => {
-    const id = targetPaneId(state);
-    const target = id ? terminalTargetDisplay(state.tabs, id) : undefined;
-    return target
+  const { data: hosts = [] } = useHosts();
+  const { data: databases = [] } = useDatabaseConnections();
+  const tabs = useTabsStore((state) => state.tabs);
+  const focusPane = useTabsStore((state) => state.focusPane);
+  const terminalTargetOptions: ExecutionTargetOption[] = terminalPanes(
+    tabs,
+  ).map((pane) => {
+    const target = terminalTargetDisplay(tabs, pane.id);
+    const label = target
       ? `${target.title}${target.paneIndex ? ` · ${target.paneIndex}/${target.paneCount}` : ""}`
-      : null;
+      : pane.title;
+    return {
+      kind: "terminal",
+      id: pane.id,
+      label,
+      detail: pane.target === "local" ? t("terminal.local.title") : undefined,
+      key: executionTargetKey({ kind: "terminal", id: pane.id, label }),
+    };
   });
+  const hostTargetOptions: ExecutionTargetOption[] = hosts.map((host) => {
+    const label = host.label;
+    return {
+      kind: "host",
+      id: host.id,
+      label,
+      detail: `${host.username ? `${host.username}@` : ""}${host.address}:${host.port}`,
+      key: executionTargetKey({ kind: "host", id: host.id, label }),
+    };
+  });
+  const databaseTargetOptions: ExecutionTargetOption[] = databases.map(
+    (connection) => {
+      const label = databaseDisplayName(connection, connection.name);
+      return {
+        kind: "database",
+        id: connection.id,
+        label,
+        detail:
+          connection.engine === "sqlite"
+            ? `${t("databases.engine.sqlite")} · ${connection.filePath ?? ""}`
+            : `${t(`databases.engine.${connection.engine}`)} · ${connection.host}:${connection.port}`,
+        key: executionTargetKey({ kind: "database", id: connection.id, label }),
+      };
+    },
+  );
+  const targetOptions = [
+    ...hostTargetOptions,
+    ...terminalTargetOptions,
+    ...databaseTargetOptions,
+  ];
+  const executionTarget = activeId
+    ? (executionTargets[activeId] ?? null)
+    : draftExecutionTarget;
+  const selectedTargetKey = executionTarget
+    ? executionTargetKey(executionTarget)
+    : "";
+  const TargetIcon =
+    executionTarget?.kind === "host"
+      ? Server
+      : executionTarget?.kind === "database"
+        ? Database
+        : TerminalIcon;
 
   const onLogScroll = () => {
     const el = scrollRef.current;
@@ -188,9 +411,26 @@ export function AssistantPanel({ width }: { width: number }) {
     });
   };
 
+  const changeApprovalMode = (next: AiApprovalMode) => {
+    if (next === approvalMode) return;
+    if (activeId) {
+      void setApprovalMode(activeId, next);
+    } else {
+      setDraftApprovalMode(next);
+    }
+  };
+
   const startChat = () => {
     startNewChat();
-    inputRef.current?.focus();
+    setDraftExecutionTarget(null);
+    setDraftApprovalMode(defaultApprovalMode);
+    setView("chat");
+    requestAnimationFrame(() => inputRef.current?.focus());
+  };
+
+  const openChat = async (id: string) => {
+    await openSession(id);
+    setView("chat");
   };
 
   useLayoutEffect(() => {
@@ -281,12 +521,13 @@ export function AssistantPanel({ width }: { width: number }) {
     stickToBottom.current = true;
     submitting.current = true;
     try {
-      const sessionId = activeId ?? (await newSession());
+      const sessionId =
+        activeId ?? (await newSession(approvalMode, executionTarget));
+      if (!activeId) setDraftExecutionTarget(null);
       void send(
         sessionId,
         prompt,
         model,
-        config?.autoApprove ?? false,
         enabledToolList,
         config?.maxHistoryTokens,
         attachments,
@@ -314,102 +555,89 @@ export function AssistantPanel({ width }: { width: number }) {
   const continueRun = () => {
     if (!activeId || !model || pending) return;
     stickToBottom.current = true;
-    void resume(
-      activeId,
-      model,
-      config?.autoApprove ?? false,
-      enabledToolList,
-      config?.maxHistoryTokens,
-    );
+    void resume(activeId, model, enabledToolList, config?.maxHistoryTokens);
   };
 
   const activeTitle = sessions.find((s) => s.id === activeId)?.title;
 
   return (
     <aside
-      style={{ width }}
-      className="flex shrink-0 flex-col overflow-hidden bg-surface"
+      style={maximized ? undefined : { width }}
+      className={cn(
+        "flex min-w-0 flex-col overflow-hidden bg-surface",
+        maximized ? "flex-1 border-l border-border-subtle" : "shrink-0",
+      )}
     >
       <PanelHeader
-        title={activeTitle || t("ai.viewTitle")}
+        title={
+          view === "sessions"
+            ? t("ai.chatListTitle")
+            : activeTitle || t("ai.viewTitle")
+        }
+        titleBefore={
+          configured && view === "chat" ? (
+            <Tooltip content={t("ai.backToChats")}>
+              <Button
+                size="icon"
+                variant="ghost"
+                className={PANEL_HEADER_ACTION_CLASS}
+                aria-label={t("ai.backToChats")}
+                onClick={() => setView("sessions")}
+              >
+                <ArrowLeft className="size-4" />
+              </Button>
+            </Tooltip>
+          ) : undefined
+        }
         titleAfter={
-          config?.autoApprove ? (
-            <button
-              type="button"
-              onClick={() => openSettings("ai")}
-              className="shrink-0 rounded bg-danger/15 px-1.5 py-0.5 text-2xs font-medium text-danger hover:bg-danger/25"
-              title={t("ai.autonomousModeHint")}
+          activeId && executionTarget ? (
+            <Tooltip
+              content={`${executionTarget.label}${executionTarget.detail ? ` · ${executionTarget.detail}` : ""}`}
             >
-              {t("ai.autonomousMode")}
-            </button>
+              <span className="flex min-w-0 max-w-36 items-center gap-1 rounded-md border border-border-subtle bg-muted px-1.5 py-0.5 text-2xs text-muted-foreground">
+                <TargetIcon className="size-3 shrink-0" />
+                <span className="truncate">{executionTarget.label}</span>
+              </span>
+            </Tooltip>
           ) : undefined
         }
         actions={
           <>
             {configured && (
-              <>
-                <Tooltip content={t("ai.newChat")}>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className={PANEL_HEADER_ACTION_CLASS}
-                    aria-label={t("ai.newChat")}
-                    onClick={startChat}
-                  >
-                    <MessageCirclePlus className="size-4" />
-                  </Button>
-                </Tooltip>
-                <DropdownMenu>
-                  <Tooltip content={t("ai.history")}>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className={PANEL_HEADER_ACTION_CLASS}
-                        aria-label={t("ai.history")}
-                      >
-                        <History className="size-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                  </Tooltip>
-                  <DropdownMenuContent
-                    align="end"
-                    className="max-h-[var(--radix-dropdown-menu-content-available-height)] w-64 overflow-y-auto overscroll-contain"
-                  >
-                    {sessions.length === 0 ? (
-                      <div className="px-2 py-3 text-center text-xs text-muted-foreground">
-                        {t("ai.noSessions")}
-                      </div>
-                    ) : (
-                      sessions.map((s) => (
-                        <DropdownMenuItem
-                          key={s.id}
-                          className="gap-1.5"
-                          onSelect={() => void openSession(s.id)}
-                        >
-                          <span className="min-w-0 flex-1 truncate">
-                            {s.title || t("ai.untitledChat")}
-                          </span>
-                          {s.id === activeId && (
-                            <Check className="size-3.5 shrink-0 text-link" />
-                          )}
-                          <button
-                            type="button"
-                            aria-label={t("ai.deleteChat")}
-                            className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-danger"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDeleteTargetId(s.id);
-                            }}
-                          >
-                            <Trash2 className="size-3.5" />
-                          </button>
-                        </DropdownMenuItem>
-                      ))
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </>
+              <Tooltip content={t("ai.newChat")}>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className={PANEL_HEADER_ACTION_CLASS}
+                  aria-label={t("ai.newChat")}
+                  onClick={startChat}
+                >
+                  <MessageCirclePlus className="size-4" />
+                </Button>
+              </Tooltip>
+            )}
+            {onToggleMaximized && (
+              <Tooltip
+                content={
+                  maximized ? t("ai.restorePanel") : t("ai.maximizePanel")
+                }
+              >
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className={PANEL_HEADER_ACTION_CLASS}
+                  aria-label={
+                    maximized ? t("ai.restorePanel") : t("ai.maximizePanel")
+                  }
+                  onClick={onToggleMaximized}
+                >
+                  {maximized ? (
+                    <Minimize2 className="size-4" />
+                  ) : (
+                    <Maximize2 className="size-4" />
+                  )}
+                </Button>
+              </Tooltip>
             )}
             <Tooltip content={t("ai.hidePanel")}>
               <Button
@@ -437,6 +665,14 @@ export function AssistantPanel({ width }: { width: number }) {
               {t("ai.setup.action")}
             </Button>
           }
+        />
+      ) : view === "sessions" ? (
+        <ChatList
+          sessions={sessions}
+          activeId={activeId}
+          locale={locale}
+          onOpen={(id) => void openChat(id)}
+          onDelete={setDeleteTargetId}
         />
       ) : (
         <>
@@ -502,14 +738,6 @@ export function AssistantPanel({ width }: { width: number }) {
           </div>
 
           <div className="shrink-0 px-3 pb-3 pt-2">
-            <div className="mb-1.5 flex min-w-0 items-center gap-1.5 text-2xs text-muted-foreground">
-              <TerminalIcon className="size-3 shrink-0" />
-              <span className="truncate" title={currentTarget ?? undefined}>
-                {currentTarget
-                  ? t("ai.commandTarget", { name: currentTarget })
-                  : t("ai.noTerminal")}
-              </span>
-            </div>
             <div className="overflow-hidden rounded-lg border border-border-strong bg-surface-raised transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/35">
               {images.length > 0 && (
                 <div className="px-2.5 pt-2.5">
@@ -570,7 +798,7 @@ export function AssistantPanel({ width }: { width: number }) {
                 placeholder={t("ai.inputPlaceholder")}
                 className="max-h-40 min-h-0 resize-none rounded-none border-0 bg-transparent px-3 pb-1.5 pt-2.5 focus-visible:ring-0"
               />
-              <div className="flex items-center gap-1.5 px-1.5 pb-1.5 pt-1">
+              <div className="flex min-w-0 items-center gap-1 px-1.5 pb-1.5 pt-1">
                 <Tooltip
                   content={
                     preparingImages
@@ -593,30 +821,123 @@ export function AssistantPanel({ width }: { width: number }) {
                     {preparingImages ? (
                       <Loader2 className="size-4 animate-spin" />
                     ) : (
-                      <ImagePlus className="size-4" />
+                      <Plus className="size-4" />
                     )}
                   </Button>
                 </Tooltip>
-                <Select
-                  value={model}
-                  onValueChange={changeModel}
-                  options={models.map((item) => ({
-                    value: item,
-                    label: item,
-                  }))}
-                  placeholder={
-                    modelsLoading
-                      ? t("ai.modelLoading")
-                      : models.length === 0
-                        ? t("ai.modelEmpty")
-                        : undefined
-                  }
-                  title={t("ai.modelLabel")}
-                  disabled={models.length === 0}
-                  showChevron={false}
-                  className="h-[var(--toolbar-control-size)] w-auto min-w-0 max-w-[70%] border-0 bg-transparent px-2 text-xs hover:bg-accent focus-visible:ring-0"
+                {!activeId && targetOptions.length > 0 ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        className="h-[var(--toolbar-control-size)] w-auto min-w-0 max-w-56 shrink justify-start px-2 text-xs font-normal"
+                        title={
+                          executionTarget
+                            ? `${executionTarget.label}${executionTarget.detail ? ` · ${executionTarget.detail}` : ""}`
+                            : t("ai.executionTarget")
+                        }
+                        aria-label={t("ai.executionTarget")}
+                      >
+                        <TargetIcon className="size-3.5 text-muted-foreground" />
+                        <span className="min-w-0 truncate">
+                          {executionTarget?.label ?? t("ai.noExecutionTarget")}
+                        </span>
+                        <ChevronDown className="size-3.5 text-muted-foreground" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="start"
+                      side="top"
+                      className="max-h-96 w-72 overflow-y-auto"
+                    >
+                      <DropdownMenuRadioGroup
+                        value={selectedTargetKey}
+                        onValueChange={(value) => {
+                          const option = targetOptions.find(
+                            (item) => item.key === value,
+                          );
+                          if (!option) return;
+                          const target = {
+                            kind: option.kind,
+                            id: option.id,
+                            label: option.label,
+                            detail: option.detail,
+                          };
+                          setDraftExecutionTarget(target);
+                          if (option.kind === "terminal") {
+                            focusPane(option.id);
+                          }
+                        }}
+                      >
+                        <ExecutionTargetMenuGroup
+                          label={t("ai.targetGroup.hosts")}
+                          options={hostTargetOptions}
+                        />
+                        <ExecutionTargetMenuGroup
+                          label={t("ai.targetGroup.terminals")}
+                          options={terminalTargetOptions}
+                        />
+                        <ExecutionTargetMenuGroup
+                          label={t("ai.targetGroup.databases")}
+                          options={databaseTargetOptions}
+                        />
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : !activeId ? (
+                  <Button
+                    variant="ghost"
+                    className="h-[var(--toolbar-control-size)] w-auto max-w-56 justify-start px-2 text-xs font-normal"
+                    title={t("ai.executionTarget")}
+                    aria-label={t("ai.executionTarget")}
+                    disabled
+                  >
+                    <TargetIcon className="size-3.5 text-muted-foreground" />
+                    <span className="truncate">
+                      {t("ai.noExecutionTarget")}
+                    </span>
+                    <ChevronDown className="size-3.5 text-muted-foreground" />
+                  </Button>
+                ) : null}
+                <ApprovalModeMenu
+                  value={approvalMode}
+                  onChange={changeApprovalMode}
                 />
-                <div className="ml-auto flex items-center gap-1.5">
+                <div className="ml-auto flex min-w-0 items-center justify-end gap-1">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        className="h-[var(--toolbar-control-size)] w-auto min-w-0 max-w-48 shrink justify-start px-2 text-xs font-normal"
+                        title={model || t("ai.modelLabel")}
+                        aria-label={t("ai.modelLabel")}
+                        disabled={models.length === 0}
+                      >
+                        <span className="min-w-0 truncate">
+                          {modelsLoading
+                            ? t("ai.modelLoading")
+                            : model || t("ai.modelEmpty")}
+                        </span>
+                        <ChevronDown className="size-3.5 text-muted-foreground" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="end"
+                      side="top"
+                      className="max-w-64"
+                    >
+                      <DropdownMenuRadioGroup
+                        value={model}
+                        onValueChange={changeModel}
+                      >
+                        {models.map((item) => (
+                          <DropdownMenuRadioItem key={item} value={item}>
+                            <span className="truncate">{item}</span>
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                   {pending ? (
                     <Tooltip content={t("ai.stopHint")}>
                       <Button
@@ -683,6 +1004,89 @@ export function AssistantPanel({ width }: { width: number }) {
         onClose={() => setDeleteTargetId(null)}
       />
     </aside>
+  );
+}
+
+function ChatList({
+  sessions,
+  activeId,
+  locale,
+  onOpen,
+  onDelete,
+}: {
+  sessions: AiSessionSummary[];
+  activeId: string | null;
+  locale: "en" | "zh-CN";
+  onOpen: (id: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  const { t } = useI18n();
+  const today = new Date().toDateString();
+  const timeFormatter = new Intl.DateTimeFormat(locale, {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const dateFormatter = new Intl.DateTimeFormat(locale, {
+    month: "short",
+    day: "numeric",
+  });
+
+  if (sessions.length === 0) {
+    return (
+      <EmptyState
+        fill
+        icon={History}
+        title={t("ai.noSessions")}
+        className="m-auto"
+      />
+    );
+  }
+
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto p-3">
+      <div className="ui-divided-list">
+        {sessions.map((session) => {
+          const active = session.id === activeId;
+          const updatedAt = new Date(session.updatedAt);
+          const updatedLabel = Number.isNaN(updatedAt.getTime())
+            ? ""
+            : (updatedAt.toDateString() === today
+                ? timeFormatter
+                : dateFormatter
+              ).format(updatedAt);
+          return (
+            <div key={session.id} className="group flex items-center">
+              <button
+                type="button"
+                aria-current={active ? "page" : undefined}
+                onClick={() => onOpen(session.id)}
+                className={cn(
+                  "ui-list-row flex min-w-0 flex-1 items-center gap-3 text-left transition-colors hover:bg-list-hover",
+                  INTERACTIVE_FOCUS_CLASS,
+                )}
+              >
+                <span className="min-w-0 flex-1 truncate text-sm">
+                  {session.title || t("ai.untitledChat")}
+                </span>
+                {active && <Check className="size-3.5 shrink-0 text-link" />}
+                <span className="shrink-0 text-2xs text-muted-foreground">
+                  {updatedLabel}
+                </span>
+              </button>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="mr-1 size-7 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+                aria-label={t("ai.deleteChat")}
+                onClick={() => onDelete(session.id)}
+              >
+                <Trash2 className="size-3.5" />
+              </Button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

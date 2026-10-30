@@ -4,8 +4,10 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { HighlightRule } from "@/features/terminal/highlight-rules";
 
 import type {
+  AiApprovalMode,
   AiChatMessage,
   AiChatResult,
+  AiExecutionTarget,
   AiModelLimits,
   AiConfig,
   AiProtocol,
@@ -14,6 +16,10 @@ import type {
   AiToolSpec,
   BatchExecEvent,
   CommandHistoryEntry,
+  DatabaseConnection,
+  DatabaseConnectionInput,
+  DatabaseQueryResult,
+  DatabaseSchemaObject,
   DeleteEvent,
   FileEntry,
   FsEndpoint,
@@ -119,6 +125,24 @@ export const ipc = {
       });
     },
   },
+  databases: {
+    list: () => invoke<DatabaseConnection[]>("database_connections_list"),
+    get: (id: string) =>
+      invoke<DatabaseConnection>("database_connections_get", { id }),
+    revealPassword: (id: string) =>
+      invoke<string>("database_connections_reveal_password", { id }),
+    create: (input: DatabaseConnectionInput) =>
+      invoke<DatabaseConnection>("database_connections_create", { input }),
+    update: (id: string, input: DatabaseConnectionInput) =>
+      invoke<DatabaseConnection>("database_connections_update", { id, input }),
+    remove: (id: string) => invoke<void>("database_connections_delete", { id }),
+    test: (id: string) =>
+      invoke<{ latencyMs: number }>("database_connections_test", { id }),
+    schema: (id: string) =>
+      invoke<DatabaseSchemaObject[]>("database_schema_list", { id }),
+    execute: (id: string, sql: string) =>
+      invoke<DatabaseQueryResult>("database_query_execute", { id, sql }),
+  },
   identities: {
     list: () => invoke<Identity[]>("identities_list"),
     revealPassword: (id: string) =>
@@ -201,6 +225,7 @@ export const ipc = {
       apiKey: string;
       model: string;
       autoApprove: boolean;
+      approvalMode: AiApprovalMode;
       enabledTools: string[];
       maxHistoryTokens: number | null;
     }) => invoke<void>("settings_apply_json", { input }),
@@ -408,7 +433,8 @@ export const ipc = {
       baseUrl: string;
       protocol: AiProtocol;
       apiKey?: string;
-      autoApprove: boolean;
+      autoApprove?: boolean;
+      approvalMode: AiApprovalMode;
       enabledTools?: string[];
       maxHistoryTokens: number | null;
     }) => invoke<void>("ai_set_config", { input }),
@@ -473,12 +499,21 @@ export const ipc = {
     session: {
       list: () => invoke<AiSessionSummary[]>("ai_session_list"),
 
-      create: () => invoke<AiSession>("ai_session_create"),
+      create: (
+        approvalMode: AiApprovalMode,
+        executionTarget: AiExecutionTarget | null,
+      ) =>
+        invoke<AiSession>("ai_session_create", {
+          approvalMode,
+          executionTarget,
+        }),
 
       get: (id: string) => invoke<AiSession>("ai_session_get", { id }),
 
       save: (id: string, messages: AiChatMessage[], title: string | null) =>
         invoke<AiSessionSummary>("ai_session_save", { id, messages, title }),
+      setApprovalMode: (id: string, approvalMode: AiApprovalMode) =>
+        invoke<void>("ai_session_set_approval_mode", { id, approvalMode }),
       remove: (id: string) => invoke<void>("ai_session_delete", { id }),
     },
   },

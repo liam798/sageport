@@ -141,6 +141,7 @@ function JsonSettingsForm({
         apiKey: next["ai.api_key"],
         model: next["ai.model"],
         autoApprove: next["ai.auto_approve"],
+        approvalMode: next["ai.approval_mode"],
         enabledTools: next["ai.enabled_tools"],
         maxHistoryTokens: next["ai.max_history_tokens"],
       });

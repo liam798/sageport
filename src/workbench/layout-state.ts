@@ -14,6 +14,7 @@ import {
 
 const ACTIVITIES = [
   "hosts",
+  "databases",
   "credentials",
   "snippets",
   "tasks",
@@ -31,6 +32,7 @@ export interface LayoutSnapshot {
   panelHeight: number;
   auxVisible: boolean;
   auxWidth: number;
+  auxMaximized: boolean;
 }
 
 export interface LayoutEnvironment {
@@ -47,6 +49,7 @@ export const DEFAULT_LAYOUT: LayoutSnapshot = {
   panelHeight: PANEL_DEFAULT,
   auxVisible: false,
   auxWidth: AUX_DEFAULT,
+  auxMaximized: false,
 };
 
 const clamp = (value: number, min: number, max: number) =>
@@ -85,6 +88,8 @@ export function normalizeLayoutSnapshot(
   const sidebarVisible = boolean(input.sidebarVisible, fallback.sidebarVisible);
   const panelVisible = boolean(input.panelVisible, fallback.panelVisible);
   const auxVisible = boolean(input.auxVisible, fallback.auxVisible);
+  const auxMaximized =
+    auxVisible && boolean(input.auxMaximized, fallback.auxMaximized);
 
   const sidebarMin = SIDEBAR_MIN * scale;
   const auxMin = AUX_MIN * scale;
@@ -139,5 +144,6 @@ export function normalizeLayoutSnapshot(
     panelHeight,
     auxVisible,
     auxWidth,
+    auxMaximized,
   };
 }

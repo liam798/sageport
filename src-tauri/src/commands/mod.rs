@@ -3,6 +3,7 @@ pub mod app;
 pub mod batch;
 pub mod bookmarks;
 pub mod clipboard;
+pub mod databases;
 pub mod forwards;
 pub mod groups;
 pub mod history;

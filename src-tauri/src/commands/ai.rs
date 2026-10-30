@@ -19,14 +19,57 @@ const MAX_CHAT_TOOLS: usize = 256;
 const MAX_CHAT_PAYLOAD_BYTES: usize = 16 * 1024 * 1024;
 const MAX_SESSION_ID_BYTES: usize = 128;
 const MAX_SESSION_TITLE_BYTES: usize = 1024;
+const MAX_EXECUTION_TARGET_ID_BYTES: usize = 1024;
+const MAX_EXECUTION_TARGET_LABEL_BYTES: usize = 4096;
+const MAX_EXECUTION_TARGET_DETAIL_BYTES: usize = 16 * 1024;
 
 const BASE_URL_SETTING: &str = "ai.base_url";
 const API_KEY_SETTING: &str = "ai.api_key";
 const PROTOCOL_SETTING: &str = "ai.protocol";
 const MODEL_SETTING: &str = "ai.model";
 const AUTO_APPROVE_SETTING: &str = "ai.auto_approve";
+const APPROVAL_MODE_SETTING: &str = "ai.approval_mode";
 const ENABLED_TOOLS_SETTING: &str = "ai.enabled_tools";
 const MAX_HISTORY_TOKENS_SETTING: &str = "ai.max_history_tokens";
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ApprovalMode {
+    Request,
+    Assistant,
+    Full,
+}
+
+impl ApprovalMode {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Request => "request",
+            Self::Assistant => "assistant",
+            Self::Full => "full",
+        }
+    }
+
+    fn from_stored(value: &str) -> Option<Self> {
+        match value {
+            "request" => Some(Self::Request),
+            "assistant" => Some(Self::Assistant),
+            "full" => Some(Self::Full),
+            _ => None,
+        }
+    }
+
+    fn from_auto_approve(auto_approve: bool) -> Self {
+        if auto_approve {
+            Self::Assistant
+        } else {
+            Self::Request
+        }
+    }
+
+    fn auto_approves(self) -> bool {
+        !matches!(self, Self::Request)
+    }
+}
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -36,6 +79,7 @@ pub struct AiConfig {
     pub protocol: Protocol,
     pub model: String,
     pub auto_approve: bool,
+    pub approval_mode: ApprovalMode,
     pub enabled_tools: Option<Vec<String>>,
     pub max_history_tokens: Option<u32>,
 }
@@ -48,6 +92,8 @@ pub struct AiConfigInput {
     pub api_key: Option<String>,
     #[serde(default)]
     pub auto_approve: bool,
+    #[serde(default)]
+    pub approval_mode: Option<ApprovalMode>,
     pub enabled_tools: Option<Vec<String>>,
     #[serde(default)]
     pub max_history_tokens: Option<u32>,
@@ -131,6 +177,9 @@ pub(crate) fn validate_ai_model(raw: &str) -> AppResult<String> {
 
 pub(crate) fn validate_ai_config(input: AiConfigInput) -> AppResult<ValidatedAiConfig> {
     let base_url = validate_base_url(&input.base_url)?;
+    let approval_mode = input
+        .approval_mode
+        .unwrap_or_else(|| ApprovalMode::from_auto_approve(input.auto_approve));
     let api_key = input
         .api_key
         .as_deref()
@@ -154,7 +203,16 @@ pub(crate) fn validate_ai_config(input: AiConfigInput) -> AppResult<ValidatedAiC
         ),
         (
             AUTO_APPROVE_SETTING.to_string(),
-            if input.auto_approve { "true" } else { "false" }.to_string(),
+            if approval_mode.auto_approves() {
+                "true"
+            } else {
+                "false"
+            }
+            .to_string(),
+        ),
+        (
+            APPROVAL_MODE_SETTING.to_string(),
+            approval_mode.as_str().to_string(),
         ),
         (
             MAX_HISTORY_TOKENS_SETTING.to_string(),
@@ -347,6 +405,11 @@ pub async fn ai_get_config(state: State<'_, AppState>) -> AppResult<AiConfig> {
         .await?
         .as_deref()
         == Some("true");
+    let approval_mode = settings_repo::get(&state.db, APPROVAL_MODE_SETTING)
+        .await?
+        .as_deref()
+        .and_then(ApprovalMode::from_stored)
+        .unwrap_or_else(|| ApprovalMode::from_auto_approve(auto_approve));
     let enabled_tools = settings_repo::get(&state.db, ENABLED_TOOLS_SETTING)
         .await?
         .map(|value| {
@@ -376,6 +439,7 @@ pub async fn ai_get_config(state: State<'_, AppState>) -> AppResult<AiConfig> {
         protocol,
         model,
         auto_approve,
+        approval_mode,
         enabled_tools,
         max_history_tokens,
     })
@@ -566,6 +630,8 @@ pub struct AiSession {
     pub id: String,
     pub title: String,
     pub messages: Vec<ai::ChatMessage>,
+    pub approval_mode: ApprovalMode,
+    pub execution_target: Option<AiExecutionTarget>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -575,8 +641,69 @@ pub struct AiSession {
 pub struct AiSessionSummary {
     pub id: String,
     pub title: String,
+    pub execution_target: Option<AiExecutionTarget>,
     pub created_at: String,
     pub updated_at: String,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiExecutionTarget {
+    pub kind: String,
+    pub id: String,
+    pub label: String,
+    pub detail: Option<String>,
+}
+
+impl AiExecutionTarget {
+    fn validate(mut self) -> AppResult<Self> {
+        self.kind = match self.kind.as_str() {
+            "host" => "host",
+            "terminal" => "terminal",
+            "database" => "database",
+            _ => return Err(AppError::Invalid("invalid execution target kind".into())),
+        }
+        .to_string();
+        self.id = validate_id(
+            &self.id,
+            "execution target id",
+            MAX_EXECUTION_TARGET_ID_BYTES,
+        )?
+        .to_string();
+        let label = bounded_text(
+            self.label.trim(),
+            "execution target label",
+            MAX_EXECUTION_TARGET_LABEL_BYTES,
+        )?;
+        if label.is_empty() {
+            return Err(AppError::Invalid(
+                "execution target label is required".into(),
+            ));
+        }
+        self.label = label.to_string();
+        self.detail = self
+            .detail
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| {
+                bounded_text(
+                    value,
+                    "execution target detail",
+                    MAX_EXECUTION_TARGET_DETAIL_BYTES,
+                )
+                .map(str::to_string)
+            })
+            .transpose()?;
+        Ok(self)
+    }
+
+    fn from_stored(value: Option<&str>) -> AppResult<Option<Self>> {
+        value
+            .map(serde_json::from_str::<Self>)
+            .transpose()
+            .map_err(AppError::from)
+    }
 }
 
 impl AiSession {
@@ -587,32 +714,53 @@ impl AiSession {
             id: row.id,
             title: row.title,
             messages,
+            approval_mode: ApprovalMode::from_stored(&row.approval_mode)
+                .unwrap_or(ApprovalMode::Request),
+            execution_target: AiExecutionTarget::from_stored(row.execution_target.as_deref())?,
             created_at: row.created_at,
             updated_at: row.updated_at,
         })
     }
 }
 
-impl From<AiSessionMetadataRow> for AiSessionSummary {
-    fn from(row: AiSessionMetadataRow) -> Self {
-        Self {
+impl AiSessionSummary {
+    fn from_row(row: AiSessionMetadataRow) -> AppResult<Self> {
+        Ok(Self {
             id: row.id,
             title: row.title,
+            execution_target: AiExecutionTarget::from_stored(row.execution_target.as_deref())?,
             created_at: row.created_at,
             updated_at: row.updated_at,
-        }
+        })
     }
 }
 
 #[tauri::command]
 pub async fn ai_session_list(state: State<'_, AppState>) -> AppResult<Vec<AiSessionSummary>> {
     let rows = ai_session_repo::list(&state.db).await?;
-    Ok(rows.into_iter().map(AiSessionSummary::from).collect())
+    rows.into_iter().map(AiSessionSummary::from_row).collect()
 }
 
 #[tauri::command]
-pub async fn ai_session_create(state: State<'_, AppState>) -> AppResult<AiSession> {
-    let row = ai_session_repo::create(&state.db).await?;
+pub async fn ai_session_create(
+    state: State<'_, AppState>,
+    approval_mode: Option<ApprovalMode>,
+    execution_target: Option<AiExecutionTarget>,
+) -> AppResult<AiSession> {
+    let approval_mode = approval_mode.unwrap_or(ApprovalMode::Request);
+    let execution_target = execution_target
+        .map(AiExecutionTarget::validate)
+        .transpose()?;
+    let execution_target_json = execution_target
+        .as_ref()
+        .map(serde_json::to_string)
+        .transpose()?;
+    let row = ai_session_repo::create(
+        &state.db,
+        approval_mode.as_str(),
+        execution_target_json.as_deref(),
+    )
+    .await?;
     AiSession::from_row(row)
 }
 
@@ -639,7 +787,17 @@ pub async fn ai_session_save(
         .transpose()?;
     let messages_json = serde_json::to_string(&messages)?;
     let row = ai_session_repo::save(&state.db, id, &messages_json, title).await?;
-    Ok(AiSessionSummary::from(row))
+    AiSessionSummary::from_row(row)
+}
+
+#[tauri::command]
+pub async fn ai_session_set_approval_mode(
+    state: State<'_, AppState>,
+    id: String,
+    approval_mode: ApprovalMode,
+) -> AppResult<()> {
+    let id = validate_id(&id, "session id", MAX_SESSION_ID_BYTES)?;
+    ai_session_repo::set_approval_mode(&state.db, id, approval_mode.as_str()).await
 }
 
 #[tauri::command]
@@ -669,6 +827,7 @@ mod tests {
             protocol: Protocol::Openai,
             model: "model".into(),
             auto_approve: false,
+            approval_mode: ApprovalMode::Request,
             enabled_tools: None,
             max_history_tokens: None,
         };
@@ -688,6 +847,29 @@ mod tests {
         .unwrap();
 
         assert!(input.enabled_tools.is_none());
+    }
+
+    #[test]
+    fn persists_explicit_approval_mode_with_legacy_flag() {
+        let validated = validate_ai_config(AiConfigInput {
+            base_url: "https://example.com/v1".into(),
+            protocol: Protocol::Openai,
+            api_key: None,
+            auto_approve: false,
+            approval_mode: Some(ApprovalMode::Full),
+            enabled_tools: None,
+            max_history_tokens: None,
+        })
+        .unwrap();
+
+        assert!(validated
+            .entries
+            .iter()
+            .any(|(key, value)| key == APPROVAL_MODE_SETTING && value == "full"));
+        assert!(validated
+            .entries
+            .iter()
+            .any(|(key, value)| key == AUTO_APPROVE_SETTING && value == "true"));
     }
 
     #[test]

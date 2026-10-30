@@ -31,6 +31,7 @@ interface LayoutState {
 
   auxVisible: boolean;
   auxWidth: number;
+  auxMaximized: boolean;
 
   selectActivity: (activity: Activity) => void;
   toggleSidebar: () => void;
@@ -40,18 +41,22 @@ interface LayoutState {
   setPanelHeight: (height: number) => void;
   toggleAux: () => void;
   setAuxWidth: (width: number) => void;
+  toggleAuxMaximized: () => void;
 
   clampToViewport: () => void;
 }
 
 export function sidebarLimits(
-  s: Pick<LayoutState, "auxVisible" | "auxWidth"> = useLayoutStore.getState(),
+  s: Pick<
+    LayoutState,
+    "auxVisible" | "auxWidth" | "auxMaximized"
+  > = useLayoutStore.getState(),
   viewportWidth = window.innerWidth,
   scale = uiScale(),
 ): SashLimits {
   return horizontalPanelLimits(
     SIDEBAR_MIN,
-    s.auxVisible ? s.auxWidth : 0,
+    s.auxVisible && !s.auxMaximized ? s.auxWidth : 0,
     viewportWidth,
     scale,
   );
@@ -89,6 +94,7 @@ function snapshot(state: LayoutSnapshot): LayoutSnapshot {
     panelHeight: state.panelHeight,
     auxVisible: state.auxVisible,
     auxWidth: state.auxWidth,
+    auxMaximized: state.auxMaximized,
   };
 }
 
@@ -134,7 +140,13 @@ export const useLayoutStore = create<LayoutState>()(
         ),
       toggleSidebar: () =>
         set((s) =>
-          normalize({ ...snapshot(s), sidebarVisible: !s.sidebarVisible }, s),
+          normalize(
+            {
+              ...snapshot(s),
+              sidebarVisible: !s.sidebarVisible,
+            },
+            s,
+          ),
         ),
       setSidebarWidth: (width) =>
         set((s) =>
@@ -173,7 +185,28 @@ export const useLayoutStore = create<LayoutState>()(
           ),
         ),
       toggleAux: () =>
-        set((s) => normalize({ ...snapshot(s), auxVisible: !s.auxVisible }, s)),
+        set((s) => {
+          const auxVisible = !s.auxVisible;
+          return normalize(
+            {
+              ...snapshot(s),
+              auxVisible,
+              auxMaximized: auxVisible ? s.auxMaximized : false,
+            },
+            s,
+          );
+        }),
+      toggleAuxMaximized: () =>
+        set((s) =>
+          normalize(
+            {
+              ...snapshot(s),
+              auxVisible: true,
+              auxMaximized: s.auxVisible ? !s.auxMaximized : true,
+            },
+            s,
+          ),
+        ),
       setAuxWidth: (width) =>
         set((s) =>
           normalize(
@@ -185,6 +218,7 @@ export const useLayoutStore = create<LayoutState>()(
               auxVisible: finite(width)
                 ? width >= (AUX_MIN * uiScale()) / 2
                 : s.auxVisible,
+              auxMaximized: false,
             },
             s,
           ),

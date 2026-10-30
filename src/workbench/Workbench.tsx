@@ -253,7 +253,9 @@ export function Workbench() {
   const setPanelHeight = useLayoutStore((s) => s.setPanelHeight);
   const auxVisible = useLayoutStore((s) => s.auxVisible);
   const auxWidth = useLayoutStore((s) => s.auxWidth);
+  const auxMaximized = useLayoutStore((s) => s.auxMaximized);
   const setAuxWidth = useLayoutStore((s) => s.setAuxWidth);
+  const toggleAuxMaximized = useLayoutStore((s) => s.toggleAuxMaximized);
   const overlay = useOverlayStore((s) => s.overlay);
   const closeOverlay = useOverlayStore((s) => s.close);
   const setSettingsSection = useOverlayStore((s) => s.setSettingsSection);
@@ -282,67 +284,86 @@ export function Workbench() {
           highlightOffset={0.5}
         />
 
-        <div
-          className={cn(
-            "workspace-editor flex min-h-0 min-w-0 flex-1 flex-col border-border-subtle",
-            sidebarVisible && "border-l",
-            auxVisible && "border-r",
-          )}
-        >
-          <EditorArea />
-          {panelVisible && (
-            <>
-              <ResizeHandle
-                axis="y"
-                reverse
-                sashId="panel"
-                size={panelHeight}
-                onResize={setPanelHeight}
-                limits={panelLimits}
-                startCorner={{
-                  targetId: "sidebar",
-                  size: sidebarVisible ? sidebarWidth : 0,
-                  onResize: setSidebarWidth,
-                }}
-                endCorner={
-                  auxVisible
-                    ? {
-                        targetId: "aux",
-                        size: auxWidth,
-                        reverse: true,
-                        onResize: setAuxWidth,
-                      }
-                    : undefined
-                }
-                showLine={false}
-                highlightOffset={0.5}
+        {auxVisible && auxMaximized ? (
+          <ErrorBoundary>
+            <Suspense fallback={<FeatureLoading fill />}>
+              <AssistantPanel
+                width={auxWidth}
+                maximized
+                onToggleMaximized={toggleAuxMaximized}
               />
-              <ErrorBoundary>
-                <Suspense fallback={<FeatureLoading height={panelHeight} />}>
-                  <SftpPanel height={panelHeight} />
-                </Suspense>
-              </ErrorBoundary>
-            </>
-          )}
-        </div>
-
-        {auxVisible && (
+            </Suspense>
+          </ErrorBoundary>
+        ) : (
           <>
-            <ResizeHandle
-              axis="x"
-              reverse
-              sashId="aux"
-              size={auxWidth}
-              onResize={setAuxWidth}
-              limits={auxLimits}
-              showLine={false}
-              highlightOffset={-0.5}
-            />
-            <ErrorBoundary>
-              <Suspense fallback={<FeatureLoading width={auxWidth} />}>
-                <AssistantPanel width={auxWidth} />
-              </Suspense>
-            </ErrorBoundary>
+            <div
+              className={cn(
+                "workspace-editor flex min-h-0 min-w-0 flex-1 flex-col border-border-subtle",
+                sidebarVisible && "border-l",
+                auxVisible && "border-r",
+              )}
+            >
+              <EditorArea />
+              {panelVisible && (
+                <>
+                  <ResizeHandle
+                    axis="y"
+                    reverse
+                    sashId="panel"
+                    size={panelHeight}
+                    onResize={setPanelHeight}
+                    limits={panelLimits}
+                    startCorner={{
+                      targetId: "sidebar",
+                      size: sidebarVisible ? sidebarWidth : 0,
+                      onResize: setSidebarWidth,
+                    }}
+                    endCorner={
+                      auxVisible
+                        ? {
+                            targetId: "aux",
+                            size: auxWidth,
+                            reverse: true,
+                            onResize: setAuxWidth,
+                          }
+                        : undefined
+                    }
+                    showLine={false}
+                    highlightOffset={0.5}
+                  />
+                  <ErrorBoundary>
+                    <Suspense
+                      fallback={<FeatureLoading height={panelHeight} />}
+                    >
+                      <SftpPanel height={panelHeight} />
+                    </Suspense>
+                  </ErrorBoundary>
+                </>
+              )}
+            </div>
+
+            {auxVisible && (
+              <>
+                <ResizeHandle
+                  axis="x"
+                  reverse
+                  sashId="aux"
+                  size={auxWidth}
+                  onResize={setAuxWidth}
+                  limits={auxLimits}
+                  showLine={false}
+                  highlightOffset={-0.5}
+                />
+                <ErrorBoundary>
+                  <Suspense fallback={<FeatureLoading width={auxWidth} />}>
+                    <AssistantPanel
+                      width={auxWidth}
+                      onToggleMaximized={toggleAuxMaximized}
+                    />
+                  </Suspense>
+                </ErrorBoundary>
+              </>
+            )}
           </>
         )}
       </div>
@@ -441,14 +462,19 @@ function LazyToaster() {
 function FeatureLoading({
   width,
   height,
+  fill = false,
 }: {
   width?: number;
   height?: number;
+  fill?: boolean;
 }) {
   return (
     <div
-      style={{ width, height }}
-      className="flex shrink-0 items-center justify-center bg-surface"
+      style={fill ? undefined : { width, height }}
+      className={cn(
+        "flex items-center justify-center bg-surface",
+        fill ? "min-w-0 flex-1" : "shrink-0",
+      )}
     >
       <Spinner />
     </div>

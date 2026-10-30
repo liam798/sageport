@@ -21,6 +21,7 @@ import {
 import { getThemeFamily, THEME_FAMILIES } from "@/themes/themes";
 import type { ThemeMode } from "@/themes/types";
 import type {
+  AiApprovalMode,
   AiProtocol,
   SyncOAuthEvent,
   SyncProviderKind,
@@ -145,14 +146,21 @@ async function updateAiSettings(
 ): Promise<ToolExecutionResult> {
   const current = await ipc.ai.getConfig();
   const maxHistoryTokens = nullableNum(args, "maxHistoryTokens");
+  const approvalMode =
+    (optionalStr(args, "approvalMode") as AiApprovalMode | undefined) ??
+    ("autoApprove" in args
+      ? bool(args, "autoApprove")
+        ? "assistant"
+        : "request"
+      : current.approvalMode);
   await ipc.ai.setConfig({
     baseUrl: "baseUrl" in args ? str(args, "baseUrl") : current.baseUrl,
     protocol:
       (optionalStr(args, "protocol") as AiProtocol | undefined) ??
       current.protocol,
     apiKey: "apiKey" in args ? str(args, "apiKey") : undefined,
-    autoApprove:
-      "autoApprove" in args ? bool(args, "autoApprove") : current.autoApprove,
+    autoApprove: approvalMode !== "request",
+    approvalMode,
     enabledTools:
       "enabledTools" in args ? strArray(args, "enabledTools") : undefined,
     maxHistoryTokens:
@@ -411,6 +419,10 @@ export const settingsTools: AiTool[] = [
           protocol: { type: "string", enum: ["openai", "anthropic"] },
           apiKey: { type: "string" },
           model: { type: "string" },
+          approvalMode: {
+            type: "string",
+            enum: ["request", "assistant", "full"],
+          },
           autoApprove: { type: "boolean" },
           enabledTools: { type: "array", items: { type: "string" } },
           maxHistoryTokens: { type: ["integer", "null"], minimum: 1 },

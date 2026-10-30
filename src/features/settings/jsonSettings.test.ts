@@ -25,6 +25,7 @@ describe("JSON settings", () => {
         baseUrl: "",
         model: "",
         autoApprove: false,
+        approvalMode: "request",
         enabledTools: null,
         maxHistoryTokens: null,
       },
@@ -53,6 +54,7 @@ describe("JSON settings", () => {
         baseUrl: "https://api.anthropic.com",
         model: "claude-sonnet",
         autoApprove: true,
+        approvalMode: "assistant",
         enabledTools: [],
         maxHistoryTokens: 200_000,
       },
@@ -68,12 +70,22 @@ describe("JSON settings", () => {
       "ai.base_url": "https://api.anthropic.com",
       "ai.api_key": "sk-secret",
       "ai.auto_approve": true,
+      "ai.approval_mode": "assistant",
       "ai.enabled_tools": [],
       "ai.max_history_tokens": 200_000,
       "general.keybindings": {
         "view.toggleSidebar": null,
         "terminal.search": "mod+shift+f",
       },
+    });
+  });
+
+  it("migrates the legacy auto-approval flag to smart approval", () => {
+    expect(
+      resolveJsonSettings({ "ai.auto_approve": true }, defaults),
+    ).toMatchObject({
+      "ai.auto_approve": true,
+      "ai.approval_mode": "assistant",
     });
   });
 

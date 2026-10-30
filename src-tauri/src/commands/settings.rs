@@ -1,7 +1,7 @@
 use tauri::State;
 
 use crate::ai::Protocol;
-use crate::commands::ai::{self, AiConfigInput};
+use crate::commands::ai::{self, AiConfigInput, ApprovalMode};
 use crate::error::{AppError, AppResult};
 use crate::repository::settings_repo;
 use crate::state::AppState;
@@ -21,6 +21,7 @@ pub struct JsonSettingsInput {
     api_key: String,
     model: String,
     auto_approve: bool,
+    approval_mode: Option<ApprovalMode>,
     enabled_tools: Vec<String>,
     max_history_tokens: Option<u32>,
 }
@@ -97,6 +98,7 @@ fn validate_json_settings(input: JsonSettingsInput) -> AppResult<Vec<(String, St
         protocol: input.protocol,
         api_key: Some(input.api_key),
         auto_approve: input.auto_approve,
+        approval_mode: input.approval_mode,
         enabled_tools: Some(input.enabled_tools),
         max_history_tokens: input.max_history_tokens,
     })?;
@@ -148,6 +150,7 @@ mod tests {
             api_key: api_key.into(),
             model: "model".into(),
             auto_approve: false,
+            approval_mode: None,
             enabled_tools: Vec::new(),
             max_history_tokens: None,
         };

@@ -25,7 +25,11 @@ export type ToolExecute = (
 
 export type ToolPrepare = (
   args: Record<string, unknown>,
-  meta: { userPrompt: string; defaultTerminalId?: string | null },
+  meta: {
+    userPrompt: string;
+    defaultTerminalId?: string | null;
+    defaultDatabaseId?: string | null;
+  },
 ) => PreparedCall | Promise<PreparedCall>;
 
 export interface AiTool {

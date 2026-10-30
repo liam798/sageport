@@ -1,5 +1,6 @@
 mod bookmark;
 pub mod cron;
+pub mod database;
 mod forward;
 mod group;
 mod history;
@@ -11,6 +12,7 @@ mod snippet;
 mod task;
 
 pub use bookmark::*;
+pub use database::*;
 pub use forward::*;
 pub use group::*;
 pub use history::*;

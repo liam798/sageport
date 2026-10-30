@@ -58,7 +58,7 @@ export function reusableHostSession(
     .sort((a, b) => priority[a.status] - priority[b.status])[0];
 }
 
-async function waitForConnection(
+export async function waitForTerminalConnection(
   id: string,
   timeoutMs: number,
   isCancelled: () => boolean = () => false,
@@ -163,7 +163,11 @@ async function connectHost(
     }
   }
 
-  const status = await waitForConnection(id, 30_000, context.isCancelled);
+  const status = await waitForTerminalConnection(
+    id,
+    30_000,
+    context.isCancelled,
+  );
   if (context.isCancelled?.()) {
     return toolFailure(
       `Error: the assistant run was stopped while connecting to "${host.label}". The terminal tab may still be open.`,

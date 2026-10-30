@@ -8,7 +8,7 @@ import { LOCALES } from "@/i18n";
 import type { Locale } from "@/i18n/config";
 import { THEME_FAMILIES, type ThemeMode } from "@/themes";
 import { DEFAULT_THEME_FAMILY_ID, DEFAULT_THEME_MODE } from "@/themes/themes";
-import type { AiConfig, AiProtocol } from "@/types/models";
+import type { AiApprovalMode, AiConfig, AiProtocol } from "@/types/models";
 import {
   DEFAULT_HIGHLIGHT_RULES,
   MAX_HIGHLIGHT_RULES,
@@ -34,6 +34,7 @@ export interface JsonSettingsValues {
   "ai.api_key": string;
   "ai.model": string;
   "ai.auto_approve": boolean;
+  "ai.approval_mode": AiApprovalMode;
   "ai.enabled_tools": string[];
   "ai.max_history_tokens": number | null;
 }
@@ -62,6 +63,7 @@ const SETTING_KEYS = [
   "ai.api_key",
   "ai.model",
   "ai.auto_approve",
+  "ai.approval_mode",
   "ai.enabled_tools",
   "ai.max_history_tokens",
 ] as const satisfies readonly (keyof JsonSettingsValues)[];
@@ -125,6 +127,7 @@ export function defaultJsonSettings(locale: Locale): JsonSettingsValues {
     "ai.api_key": "",
     "ai.model": "",
     "ai.auto_approve": false,
+    "ai.approval_mode": "request",
     "ai.enabled_tools": resolveEnabledToolNames(null),
     "ai.max_history_tokens": null,
   };
@@ -153,7 +156,8 @@ export function createJsonSettingsValues(input: {
     "ai.base_url": input.ai.baseUrl,
     "ai.api_key": input.apiKey,
     "ai.model": input.ai.model,
-    "ai.auto_approve": input.ai.autoApprove,
+    "ai.auto_approve": input.ai.approvalMode !== "request",
+    "ai.approval_mode": input.ai.approvalMode,
     "ai.enabled_tools": resolveEnabledToolNames(input.ai.enabledTools),
     "ai.max_history_tokens": input.ai.maxHistoryTokens,
   };
@@ -174,7 +178,14 @@ export function resolveJsonSettings(
   document: JsonSettingsDocument,
   defaults: JsonSettingsValues,
 ): JsonSettingsValues {
-  return { ...defaults, ...document };
+  const resolved = { ...defaults, ...document };
+  if (
+    document["ai.approval_mode"] === undefined &&
+    document["ai.auto_approve"] === true
+  ) {
+    resolved["ai.approval_mode"] = "assistant";
+  }
+  return resolved;
 }
 
 export function jsonSettingsSchema(): Record<string, unknown> {
@@ -259,6 +270,10 @@ export function jsonSettingsSchema(): Record<string, unknown> {
       },
       "ai.auto_approve": {
         type: "boolean",
+      },
+      "ai.approval_mode": {
+        type: "string",
+        enum: ["request", "assistant", "full"],
       },
       "ai.enabled_tools": {
         type: "array",
@@ -402,6 +417,17 @@ export function parseJsonSettings(text: string): JsonSettingsParseResult {
       return invalid("ai.auto_approve");
     }
     patch["ai.auto_approve"] = value;
+  }
+
+  if (has("ai.approval_mode")) {
+    const value = raw["ai.approval_mode"];
+    if (
+      typeof value !== "string" ||
+      !["request", "assistant", "full"].includes(value)
+    ) {
+      return invalid("ai.approval_mode");
+    }
+    patch["ai.approval_mode"] = value as AiApprovalMode;
   }
 
   if (has("ai.enabled_tools")) {

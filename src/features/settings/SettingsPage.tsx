@@ -24,7 +24,6 @@ import {
   LoadingState,
   ScrollArea,
   Select,
-  SwitchField,
   Tooltip,
 } from "@/components/ui";
 import { useI18n, type TKey } from "@/i18n";
@@ -32,7 +31,7 @@ import { ipc } from "@/lib/ipc";
 import { errorMessage, toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import type { SettingsSection } from "@/workbench/overlays";
-import type { AiConfig, AiProtocol } from "@/types/models";
+import type { AiApprovalMode, AiConfig, AiProtocol } from "@/types/models";
 import {
   AI_PROTOCOLS,
   exampleBaseUrl,
@@ -90,6 +89,7 @@ const NAV: {
     icon: Info,
   },
 ];
+const APPROVAL_MODES: AiApprovalMode[] = ["request", "assistant", "full"];
 
 export function SettingsDialog({
   open,
@@ -255,7 +255,7 @@ function AiForm({ config }: { config: AiConfig }) {
   const [baseUrl, setBaseUrl] = useState(config.baseUrl);
   const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState(config.model);
-  const [autoApprove, setAutoApprove] = useState(config.autoApprove);
+  const [approvalMode, setApprovalMode] = useState(config.approvalMode);
   const [enabledTools, setEnabledTools] = useState(() =>
     resolveEnabledToolNames(config.enabledTools),
   );
@@ -269,14 +269,14 @@ function AiForm({ config }: { config: AiConfig }) {
     baseUrl: string;
     protocol: AiProtocol;
     apiKey?: string;
-    autoApprove: boolean;
+    approvalMode: AiApprovalMode;
     enabledTools: string[];
     maxHistoryTokens: number | null;
   };
   const values = useRef<ConfigInput>({
     baseUrl: config.baseUrl,
     protocol: config.protocol,
-    autoApprove: config.autoApprove,
+    approvalMode: config.approvalMode,
     enabledTools: resolveEnabledToolNames(config.enabledTools),
     maxHistoryTokens: config.maxHistoryTokens,
   });
@@ -353,9 +353,9 @@ function AiForm({ config }: { config: AiConfig }) {
     saveConfig({ protocol: next, baseUrl: "" });
   };
 
-  const changeAutoApprove = (next: boolean) => {
-    setAutoApprove(next);
-    saveConfig({ autoApprove: next });
+  const changeApprovalMode = (next: AiApprovalMode) => {
+    setApprovalMode(next);
+    saveConfig({ approvalMode: next });
   };
 
   const changeEnabledTools = (next: string[]) => {
@@ -455,15 +455,21 @@ function AiForm({ config }: { config: AiConfig }) {
 
       <SettingsGroup title={t("settings.ai.behaviorTitle")}>
         <div className="ui-content-stack">
-          <SwitchField
-            fieldLabel={t("settings.ai.autonomousModeLabel")}
-            label={t("settings.ai.autonomousMode")}
-            hint={t("settings.ai.autonomousModeHint")}
-            description={t("settings.ai.autonomousModeWarning")}
-            descriptionClassName="text-danger"
-            checked={autoApprove}
-            onCheckedChange={changeAutoApprove}
-          />
+          <Field
+            label={t("settings.ai.approvalModeLabel")}
+            hint={t(`settings.ai.approvalModeDescription.${approvalMode}`)}
+          >
+            <Select
+              value={approvalMode}
+              onValueChange={(value) =>
+                changeApprovalMode(value as AiApprovalMode)
+              }
+              options={APPROVAL_MODES.map((mode) => ({
+                value: mode,
+                label: t(`settings.ai.approvalMode.${mode}`),
+              }))}
+            />
+          </Field>
         </div>
       </SettingsGroup>
 

@@ -164,6 +164,15 @@ pub fn run() {
             commands::hosts::hosts_move,
             commands::hosts::hosts_delete,
             commands::hosts::hosts_check_health,
+            commands::databases::database_connections_list,
+            commands::databases::database_connections_get,
+            commands::databases::database_connections_reveal_password,
+            commands::databases::database_connections_create,
+            commands::databases::database_connections_update,
+            commands::databases::database_connections_delete,
+            commands::databases::database_connections_test,
+            commands::databases::database_schema_list,
+            commands::databases::database_query_execute,
             commands::identities::identities_list,
             commands::identities::identities_reveal_password,
             commands::identities::identities_create,
@@ -284,6 +293,7 @@ pub fn run() {
             commands::ai::ai_session_create,
             commands::ai::ai_session_get,
             commands::ai::ai_session_save,
+            commands::ai::ai_session_set_approval_mode,
             commands::ai::ai_session_delete,
         ])
         .build(tauri::generate_context!())
